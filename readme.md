@@ -11,12 +11,11 @@ A Chrome extension inspired by the collie-reader/collie repository and serving a
 - Clean and user-friendly interface
 
 ## Installation
-
-1. Download or clone this repository
+1. Download the latest release from [GitHub](https://github.com/akbarhlubis/rss-feed-extension/releases) or clone this repository
 2. Open Chrome and navigate to `chrome://extensions/`
 3. Enable "Developer mode" in the top right
 4. Click "Load unpacked" and select the extension directory
-5. The Collie Notifier extension should now be installed
+5. RSS Notifier extension should now be installed
 
 ## Usage
 
