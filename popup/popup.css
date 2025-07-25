@@ -1,0 +1,157 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  font-size: 14px;
+  color: #333;
+}
+
+.container {
+  width: 350px;
+  padding: 16px;
+}
+
+h1 {
+  text-align: center;
+  color: #2c3e50;
+  margin-bottom: 16px;
+  font-size: 18px;
+}
+
+h2 {
+  font-size: 16px;
+  color: #34495e;
+  margin-bottom: 8px;
+}
+
+.add-url-section, .urls-section {
+  background-color: #f9f9f9;
+  border-radius: 6px;
+  padding: 12px;
+  margin-bottom: 16px;
+}
+
+.input-group {
+  margin-bottom: 10px;
+}
+
+label {
+  display: block;
+  margin-bottom: 3px;
+  font-weight: 500;
+}
+
+input {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.btn {
+  background-color: #3498db;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  width: 100%;
+}
+
+.btn:hover {
+  background-color: #2980b9;
+}
+
+.url-item {
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 10px;
+  margin-bottom: 8px;
+  position: relative;
+}
+
+.url-name {
+  font-weight: bold;
+  margin-bottom: 4px;
+}
+
+.url-details {
+  font-size: 12px;
+  color: #666;
+}
+
+.delete-btn {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  background-color: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 3px 6px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.no-urls {
+  text-align: center;
+  color: #999;
+  padding: 12px 0;
+}
+
+.rss-latest {
+  margin-top: 8px;
+  background: #eef6fc;
+  border-radius: 4px;
+  padding: 8px 8px 4px 8px;
+  font-size: 13px;
+}
+.rss-latest strong {
+  color: #2c3e50;
+  font-size: 13px;
+}
+.rss-latest ul {
+  margin-top: 4px;
+  padding-left: 18px;
+  list-style-type: disc;
+}
+.rss-latest li {
+  margin-bottom: 2px;
+  font-size: 13px;
+}
+.rss-latest a {
+  color: #2980b9;
+  text-decoration: none;
+  transition: color 0.2s;
+  word-break: break-word;
+}
+.rss-latest a:hover {
+  text-decoration: underline;
+  color: #1a5276;
+}
+
+.btn-group {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  justify-content: flex-end;
+}
+.check-btn {
+  background-color: #27ae60;
+  color: white;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+.check-btn:hover {
+  background-color: #219150;
+}

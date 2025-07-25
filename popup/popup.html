@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RSS Notifier</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <h1>RSS Notifier</h1>
+    
+    <div class="add-url-section">
+      <h2>Add URL</h2>
+      <form id="add-url-form">
+        <div class="input-group">
+          <input type="url" id="url-input" placeholder="https://example.com" required>
+        </div>
+        <div class="input-group">
+          <label for="name-input">Name:</label>
+          <input type="text" id="name-input" placeholder="Site name" required>
+        </div>
+        <div class="input-group">
+          <label for="interval-input">Check interval (minutes):</label>
+          <input type="number" id="interval-input" min="1" value="30" required>
+        </div>
+        <div class="input-group">
+          <label for="selector-input">CSS Selector (optional):</label>
+          <input type="text" id="selector-input" placeholder=".content, #main, etc">
+        </div>
+        <button type="submit" class="btn">Add URL</button>
+      </form>
+    </div>
+    
+    <div class="urls-section">
+      <h2>URLs</h2>
+      <div id="urls-list">
+        <!-- URLs will be listed here -->
+        <div class="no-urls">No URLs added yet.</div>
+      </div>
+    </div>
+  </div>
+  <script src="popup.js"></script>
+</body>
+</html>
