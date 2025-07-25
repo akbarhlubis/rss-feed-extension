@@ -1,4 +1,4 @@
-# Collie Notifier
+# RSS Notifier
 
 A Chrome extension inspired by the collie-reader/collie repository that monitors rss for changes and sends notifications.
 
