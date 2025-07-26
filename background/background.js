@@ -203,7 +203,7 @@ function showNotification(url) {
   const latestTitle = url.latestItems && url.latestItems[0] ? url.latestItems[0].title : 'Ada konten baru!';
   chrome.notifications.create({
     type: 'basic',
-    iconUrl: '/assets/icon.png',
+    iconUrl: '/assets/icon16.png',
     title: url.name,
     message: latestTitle,
     priority: 1
