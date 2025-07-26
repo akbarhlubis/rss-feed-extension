@@ -1,14 +1,17 @@
 {
   "manifest_version": 3,
   "name": "RSS Notifier",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Get notifications from your favorite websites at specified intervals, inspired by Collie Notifier App and FeedBro Extension.",
   "icons": {
-    "128": "assets/icon.png"
+  "16": "assets/icon16.png",
+  "32": "assets/icon32.png",
+  "48": "assets/icon48.png",
+  "128": "assets/icon128.png"
   },
   "action": {
     "default_popup": "popup/popup.html",
-    "default_icon": "assets/icon.png"
+    "default_icon": "assets/icon128.png"
   },
   "permissions": [
     "storage",

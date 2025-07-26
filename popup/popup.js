@@ -81,14 +81,28 @@ document.addEventListener('DOMContentLoaded', function() {
             ${
               item.latestItems && item.latestItems.length
                 ? item.latestItems.map(i =>
-                    `<li><a href="${i.link}" target="_blank">${i.title}</a></li>`
+                    `<li>
+                      <a href="${i.link}" target="_blank">${i.title}</a>
+                      <span class="rss-date">${
+                        i.pubDate
+                          ? new Date(i.pubDate).toLocaleString('id-ID', {
+                              day: '2-digit',
+                              month: 'short',
+                              year: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
+                          : ''
+                      }</span>
+                      ${i.blockquote ? `<div class="rss-blockquote">${i.blockquote}</div>` : ''}
+                    </li>`
                   ).join('')
                 : '<li><em>(belum ada data)</em></li>'
             }
           </ul>
         </div>
         <div class="btn-group">
-          <button class="check-btn">Cek Sekarang</button>
+          <button class="check-btn">Check Now</button>
           <button class="delete-btn">Delete</button>
         </div>
       `;
@@ -114,4 +128,23 @@ document.addEventListener('DOMContentLoaded', function() {
       displayUrls(changes.urls.newValue || []);
     }
   });
+});
+
+// default is to collapse the URLs section
+document.addEventListener('DOMContentLoaded', function() {
+  const urlsList = document.querySelector('#urls-list');
+  urlsList.classList.add('collapsed');
+  document.getElementById('collapse-urls').textContent = 'Open';
+});
+
+// handle collapse/expand URLs section
+document.getElementById('collapse-urls').addEventListener('click', function() {
+  const urlsList = document.querySelector('#urls-list');
+  if (urlsList.classList.contains('collapsed')) {
+    urlsList.classList.remove('collapsed');
+    this.textContent = 'Close';
+  } else {
+    urlsList.classList.add('collapsed');
+    this.textContent = 'Open';
+  }
 });

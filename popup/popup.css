@@ -92,7 +92,7 @@ input {
   list-style-type: disc;
 }
 .rss-latest li {
-  margin-bottom: 2px;
+  margin-bottom: 7px;
   font-size: 13px;
 }
 .rss-latest a {
@@ -104,6 +104,25 @@ input {
 .rss-latest a:hover {
   text-decoration: underline;
   color: #1a5276;
+}
+.rss-date {
+  display: block;
+  font-size: 11px;
+  color: #888;
+  margin-left: 2px;
+}
+.rss-author {
+  color: #666;
+  font-size: 12px;
+  margin-top: 2px;
+}
+.rss-blockquote {
+  background: #f5f5f5;
+  border-left: 3px solid #bbb;
+  padding: 6px 10px;
+  margin: 4px 0 4px 0;
+  font-size: 12px;
+  color: #444;
 }
 .btn-group {
   display: flex;
@@ -135,4 +154,35 @@ input {
 }
 .delete-btn:hover {
   background-color: #c0392b;
+}
+
+.input-hint {
+  font-size: 10px;
+  color: red;
+  margin-top: 4px;
+}
+
+.header-url{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+#collapse-urls {
+  background-color: #e0e0e0;
+  color: #333;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#collapse-urls:hover {
+  background-color: #d5d5d5;
+}
+
+.collapsed {
+  display: none;
 }

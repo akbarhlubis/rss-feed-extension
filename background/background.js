@@ -3,13 +3,11 @@ chrome.runtime.onInstalled.addListener(() => {
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('Received message:', message);
   if (message.action === 'scheduleCheck') {
     scheduleCheck(message.url);
   } else if (message.action === 'cancelCheck') {
     cancelCheck(message.id);
   } else if (message.action === 'manualCheck') {
-    console.log('Manual check triggered for ID:', message.id);
     checkUrl(message.id);
   }
 });
@@ -36,7 +34,7 @@ function scheduleCheck(url) {
     delayInMinutes: url.interval,
     periodInMinutes: url.interval
   });
-  // Cek awal langsung
+  // check immediately after scheduling
   checkUrl(url.id);
 }
 
@@ -45,123 +43,213 @@ function cancelCheck(id) {
   chrome.alarms.clear(alarmName);
 }
 
+// Helper: Remove HTML tags and trim whitespace
+function stripHtmlTags(str) {
+  if (!str) return '';
+  return str.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1')  // Handle CDATA
+           .replace(/&lt;/g, '<')
+           .replace(/&gt;/g, '>')
+           .replace(/&quot;/g, '"')
+           .replace(/&amp;/g, '&')
+           .replace(/<[^>]+>/g, '')
+           .trim();
+}
+
 function parseXML(xmlText) {
-  // Simple XML parsing dengan regex
   const items = [];
+  let isAtom = xmlText.includes('<entry>');
+  let isRSS = xmlText.includes('<item>');
   
-  // Untuk Atom Feed (seperti contoh yang kamu berikan)
-  const atomEntryRegex = /<entry>([\s\S]*?)<\/entry>/g;
-  let entryMatch;
-  
-  while ((entryMatch = atomEntryRegex.exec(xmlText)) !== null) {
-    const entryContent = entryMatch[1];
-    
-    // Parse title
-    const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(entryContent);
-    const title = titleMatch ? titleMatch[1].trim() : '';
-    
-    // Parse link (Atom format)
-    const linkMatch = /<link[^>]*href="([^"]*)"[^>]*>/i.exec(entryContent);
-    const link = linkMatch ? linkMatch[1] : '';
-    
-    // Parse updated atau published
-    const dateMatch = /<(updated|published)[^>]*>([\s\S]*?)<\/(updated|published)>/i.exec(entryContent);
-    const pubDate = dateMatch ? dateMatch[2].trim() : '';
-    
-    items.push({ title, link, pubDate });
-    
-    // Batas 3 item
-    if (items.length >= 3) break;
+  if (!isAtom && !isRSS) {
+    console.error('Format tidak dikenali: bukan RSS atau Atom');
+    return items;
   }
-  
-  // Jika tidak ada entry (mungkin RSS), coba parse item RSS
-  if (items.length === 0) {
-    const rssItemRegex = /<item>([\s\S]*?)<\/item>/g;
-    let itemMatch;
-    
-    while ((itemMatch = rssItemRegex.exec(xmlText)) !== null) {
-      const itemContent = itemMatch[1];
-      
-      // Parse title
-      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(itemContent);
-      const title = titleMatch ? titleMatch[1].trim() : '';
-      
-      // Parse link (RSS format)
-      const linkMatch = /<link[^>]*>([\s\S]*?)<\/link>/i.exec(itemContent);
-      const link = linkMatch ? linkMatch[1].trim() : '';
-      
-      // Parse pubDate
-      const pubDateMatch = /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i.exec(itemContent);
-      const pubDate = pubDateMatch ? pubDateMatch[1].trim() : '';
-      
-      items.push({ title, link, pubDate });
-      
-      // Batas 3 item
+
+  // if format is Atom
+  if (isAtom) {
+    const atomEntryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+    let entryMatch;
+
+    while ((entryMatch = atomEntryRegex.exec(xmlText)) !== null) {
+      const entryContent = entryMatch[1];
+
+      // Title
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(entryContent);
+      const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
+
+      // Link
+      const linkMatch = /<link[^>]*href="([^"]*)"[^>]*>/i.exec(entryContent);
+      const link = linkMatch ? linkMatch[1] : '';
+
+      // PubDate
+      const dateMatch = /<(updated|published)[^>]*>([\s\S]*?)<\/(updated|published)>/i.exec(entryContent);
+      const pubDate = dateMatch ? dateMatch[2].trim() : '';
+
+      // Author & Blockquote
+      let blockquote = '';
+      let author = '';
+      const summaryMatch = /<summary[\s\S]*?>([\s\S]*?)<\/summary>/i.exec(entryContent);
+      if (summaryMatch) {
+        // looking for <div class="blockquote">...</div>
+        const blockquoteMatch = /<div class="blockquote[^>]*>([\s\S]*?)<\/div>/i.exec(summaryMatch[1]);
+        if (blockquoteMatch) {
+          blockquote = stripHtmlTags(blockquoteMatch[1]);
+
+          // Take <strong>...</strong>
+          const strongMatch = /<strong[^>]*>(.*?)<\/strong>/i.exec(summaryMatch[1]);
+          if (strongMatch) {
+            author = stripHtmlTags(strongMatch[1]);
+          }
+        }
+      }
+
+      // If author is not found in blockquote, try to find it in author tag
+      if (!author) {
+        const authorMatch = /<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/i.exec(entryContent);
+        if (authorMatch) {
+          author = stripHtmlTags(authorMatch[1]);
+        }
+      }
+
+      items.push({ title, link, pubDate, author, blockquote });
+
       if (items.length >= 3) break;
     }
   }
-  
-  console.log('Parsed items:', items);
+
+  // If format is RSS
+  else if (isRSS) {
+    const rssItemRegex = /<item>([\s\S]*?)<\/item>/g;
+    let itemMatch;
+
+    while ((itemMatch = rssItemRegex.exec(xmlText)) !== null) {
+      const itemContent = itemMatch[1];
+
+      // Title
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(itemContent);
+      const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
+
+      // Link
+      const linkMatch = /<link[^>]*>([\s\S]*?)<\/link>/i.exec(itemContent);
+      const link = linkMatch ? linkMatch[1].trim() : '';
+
+      // PubDate - RSS using format RFC 822
+      const dateMatch = /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i.exec(itemContent);
+      const pubDate = dateMatch ? dateMatch[1].trim() : '';
+
+      // Description as blockquote
+      let blockquote = '';
+      const descMatch = /<description[^>]*>([\s\S]*?)<\/description>/i.exec(itemContent);
+      if (descMatch) {
+        blockquote = stripHtmlTags(descMatch[1]);
+      }
+
+      // Author - RSS can use <dc:creator> or <author>
+      let author = '';
+      const dcCreatorMatch = /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i.exec(itemContent);
+      if (dcCreatorMatch) {
+        author = stripHtmlTags(dcCreatorMatch[1]);
+      } else {
+        const authorMatch = /<author[^>]*>([\s\S]*?)<\/author>/i.exec(itemContent);
+        if (authorMatch) {
+          author = stripHtmlTags(authorMatch[1]);
+        }
+      }
+
+      items.push({ title, link, pubDate, author, blockquote });
+
+      if (items.length >= 3) break;
+    }
+  }
+
   return items;
 }
 
 function checkUrl(urlId) {
-  console.log('checkUrl called for id:', urlId);
   chrome.storage.local.get('urls', data => {
     const urls = data.urls || [];
     const url = urls.find(u => u.id === urlId);
-    if (!url) {
-      console.warn('URL not found for id:', urlId);
+    if (!url) return;
+
+    // Prevent multiple simultaneous checks for same URL
+    if (url.isChecking) {
+      console.log('Already checking URL:', url.name);
       return;
     }
 
-    console.log('Fetching:', url.url);
+    // Mark as checking
+    url.isChecking = true;
+    chrome.storage.local.set({ urls: urls });
+
     fetch(url.url)
-      .then(response => {
-        console.log('Fetch response status:', response.status);
-        return response.text();
-      })
+      .then(response => response.text())
       .then(xmlText => {
-        console.log('Fetched XML text length:', xmlText.length);
-        
-        // Menggunakan parser regex custom
         const latestItems = parseXML(xmlText);
-        console.log('Parsed latest items:', latestItems);
-        
-        // Deteksi perubahan
-        let changed = false;
-        if (latestItems.length > 0) {
-          if (url.lastContent !== latestItems[0].title) {
-            changed = !!url.lastContent;
-            url.lastContent = latestItems[0].title;
-            console.log('Content changed:', changed);
-          }
-        }
 
-        url.latestItems = latestItems;
-        url.lastChecked = new Date().toISOString();
+        // Get fresh data to avoid race conditions
+        chrome.storage.local.get('urls', freshData => {
+          const freshUrls = freshData.urls || [];
+          const freshUrl = freshUrls.find(u => u.id === urlId);
+          if (!freshUrl) return;
 
-        chrome.storage.local.set({ urls: urls }, () => {
-          console.log('Storage updated with new items');
-          if (changed) {
-            showNotification(url);
+          let hasNewContent = false;
+          
+          if (latestItems.length > 0) {
+            const newTitle = latestItems[0].title;
+            const oldTitle = freshUrl.lastContent;
+            
+            // Only trigger notification if:
+            // 1. We have a previous title to compare with
+            // 2. The new title is different from the old one
+            // 3. The new title is not empty
+            if (oldTitle && newTitle && oldTitle !== newTitle) {
+              hasNewContent = true;
+              console.log('New content detected for:', freshUrl.name);
+              console.log('Old:', oldTitle);
+              console.log('New:', newTitle);
+            }
+            
+            freshUrl.lastContent = newTitle;
           }
+
+          freshUrl.latestItems = latestItems;
+          freshUrl.lastChecked = new Date().toISOString();
+          freshUrl.isChecking = false; // Clear checking flag
+
+          chrome.storage.local.set({ urls: freshUrls }, () => {
+            if (hasNewContent) {
+              showNotification(freshUrl);
+            }
+          });
         });
       })
       .catch(error => {
-        console.error('Error checking', url.url, ':', error);
+        console.error('Error checking', url?.url, ':', error);
+        
+        // Clear checking flag on error
+        chrome.storage.local.get('urls', errorData => {
+          const errorUrls = errorData.urls || [];
+          const errorUrl = errorUrls.find(u => u.id === urlId);
+          if (errorUrl) {
+            errorUrl.isChecking = false;
+            chrome.storage.local.set({ urls: errorUrls });
+          }
+        });
       });
   });
 }
 
 function showNotification(url) {
   const latestTitle = url.latestItems && url.latestItems[0] ? url.latestItems[0].title : 'Ada konten baru!';
-  console.log('Showing notification:', url.name, latestTitle);
-  chrome.notifications.create({
+  const notificationId = `rss_${url.id}_${Date.now()}`;
+  
+  chrome.notifications.create(notificationId, {
     type: 'basic',
-    iconUrl: '/assets/icon.png',
-    title: url.name,
+    iconUrl: '/assets/icon48.png',
+    title: `📰 ${url.name}`,
     message: latestTitle,
     priority: 1
   });
+
+  console.log('Notification shown for:', url.name, '- Title:', latestTitle);
 }
