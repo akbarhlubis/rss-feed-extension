@@ -1,18 +1,18 @@
-// Initialize when extension is installed or updated
 chrome.runtime.onInstalled.addListener(() => {
   setupAlarms();
 });
 
-// Listen for messages from the popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'scheduleCheck') {
     scheduleCheck(message.url);
   } else if (message.action === 'cancelCheck') {
     cancelCheck(message.id);
+  } else if (message.action === 'manualCheck') {
+    checkUrl(message.id);
   }
 });
 
-// Handle alarm events (triggered when it's time to check a URL)
+// Alarm akan trigger checkUrl
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name.startsWith('check_url_')) {
     const urlId = parseInt(alarm.name.split('_')[2]);
@@ -20,104 +20,93 @@ chrome.alarms.onAlarm.addListener(alarm => {
   }
 });
 
-// Set up alarms for all URLs in storage
 function setupAlarms() {
   chrome.storage.local.get('urls', data => {
     const urls = data.urls || [];
-    
     urls.forEach(url => {
       scheduleCheck(url);
     });
   });
 }
 
-// Schedule a check for a URL
 function scheduleCheck(url) {
   const alarmName = `check_url_${url.id}`;
-  
   chrome.alarms.create(alarmName, {
     delayInMinutes: url.interval,
     periodInMinutes: url.interval
   });
-  
-  // Also check immediately
+  // Cek awal langsung
   checkUrl(url.id);
 }
 
-// Cancel a check for a URL
 function cancelCheck(id) {
   const alarmName = `check_url_${id}`;
   chrome.alarms.clear(alarmName);
 }
 
-// Check a URL for changes
 function checkUrl(urlId) {
   chrome.storage.local.get('urls', data => {
     const urls = data.urls || [];
     const url = urls.find(u => u.id === urlId);
-    
-    if (!url) {
-      return; // URL not found
-    }
-    
-    // Fetch the URL content
+    if (!url) return;
+
     fetch(url.url)
       .then(response => response.text())
-      .then(html => {
-        let content = html;
-        
-        // If a selector is specified, extract only that content
-        if (url.selector) {
-          const parser = new DOMParser();
-          const doc = parser.parseFromString(html, 'text/html');
-          const selectedElement = doc.querySelector(url.selector);
-          
-          if (selectedElement) {
-            content = selectedElement.textContent.trim();
+      .then(xmlText => {
+        const parser = new DOMParser();
+        const xml = parser.parseFromString(xmlText, 'application/xml');
+        // Support Atom (entry) dan RSS (item)
+        let entries = Array.from(xml.querySelectorAll('entry'));
+        if (entries.length === 0) {
+          entries = Array.from(xml.querySelectorAll('item'));
+        }
+        const latestItems = entries.slice(0, 3).map(entry => {
+          // Atom
+          const title = entry.querySelector('title')?.textContent || '';
+          let link = '';
+          if (entry.querySelector('link')) {
+            link = entry.querySelector('link').getAttribute('href') || entry.querySelector('link').textContent || '';
+          } else if (entry.querySelector('guid')) {
+            link = entry.querySelector('guid').textContent || '';
+          }
+          const pubDate = entry.querySelector('updated')?.textContent ||
+                          entry.querySelector('pubDate')?.textContent ||
+                          '';
+          return { title, link, pubDate };
+        });
+
+        // Deteksi perubahan: bandingkan title item terbaru
+        let changed = false;
+        if (latestItems.length > 0) {
+          if (url.lastContent !== latestItems[0].title) {
+            changed = !!url.lastContent; // Jangan notif pertama kali
+            url.lastContent = latestItems[0].title;
           }
         }
-        
-        // Check if the content has changed
-        if (url.lastContent && url.lastContent !== content) {
-          showNotification(url);
-        }
-        
-        // Update the URL data
+
+        url.latestItems = latestItems;
         url.lastChecked = new Date().toISOString();
-        url.lastContent = content;
-        
-        // Save back to storage
-        chrome.storage.local.set({ urls: urls });
+
+        // Update storage
+        chrome.storage.local.set({ urls: urls }, () => {
+          if (changed) {
+            showNotification(url);
+          }
+        });
       })
       .catch(error => {
-        console.error(`Error checking ${url.url}:`, error);
+        console.error(`Error checking ${url?.url}:`, error);
       });
   });
 }
 
-// Show a notification when content changes
 function showNotification(url) {
+  const latestTitle = url.latestItems && url.latestItems[0] ? url.latestItems[0].title : 'Ada konten baru!';
   chrome.notifications.create({
     type: 'basic',
     iconUrl: '/assets/icon.png',
-    title: 'Content Changed: ' + url.name,
-    message: `The content at ${url.name} has changed.`,
-    buttons: [
-      { title: 'View' }
-    ],
-    priority: 0
+    title: url.name,
+    message: latestTitle,
+    priority: 1
   });
 }
-
-// Handle notification clicks
-chrome.notifications.onClicked.addListener(notificationId => {
-  // Open the URL in a new tab
-  chrome.storage.local.get('urls', data => {
-    const urls = data.urls || [];
-    const url = urls.find(u => notificationId.includes(u.id.toString()));
-    
-    if (url) {
-      chrome.tabs.create({ url: url.url });
-    }
-  });
-});
