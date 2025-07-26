@@ -1,5 +1,7 @@
 # RSS Notifier
 
+![Demo RSS Notifier](demo.gif)
+
 A Chrome extension inspired by the collie-reader/collie repository and serving as an alternative to Feedbro, my favorite Google Chrome extension (which is no longer supported on Chrome). This extension monitors RSS feeds for changes and sends notifications.
 
 ## Features
