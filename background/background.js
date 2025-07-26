@@ -171,41 +171,85 @@ function checkUrl(urlId) {
     const url = urls.find(u => u.id === urlId);
     if (!url) return;
 
+    // Prevent multiple simultaneous checks for same URL
+    if (url.isChecking) {
+      console.log('Already checking URL:', url.name);
+      return;
+    }
+
+    // Mark as checking
+    url.isChecking = true;
+    chrome.storage.local.set({ urls: urls });
+
     fetch(url.url)
       .then(response => response.text())
       .then(xmlText => {
         const latestItems = parseXML(xmlText);
 
-        let changed = false;
-        if (latestItems.length > 0) {
-          if (url.lastContent !== latestItems[0].title) {
-            changed = !!url.lastContent;
-            url.lastContent = latestItems[0].title;
-          }
-        }
+        // Get fresh data to avoid race conditions
+        chrome.storage.local.get('urls', freshData => {
+          const freshUrls = freshData.urls || [];
+          const freshUrl = freshUrls.find(u => u.id === urlId);
+          if (!freshUrl) return;
 
-        url.latestItems = latestItems;
-        url.lastChecked = new Date().toISOString();
-
-        chrome.storage.local.set({ urls: urls }, () => {
-          if (changed) {
-            showNotification(url);
+          let hasNewContent = false;
+          
+          if (latestItems.length > 0) {
+            const newTitle = latestItems[0].title;
+            const oldTitle = freshUrl.lastContent;
+            
+            // Only trigger notification if:
+            // 1. We have a previous title to compare with
+            // 2. The new title is different from the old one
+            // 3. The new title is not empty
+            if (oldTitle && newTitle && oldTitle !== newTitle) {
+              hasNewContent = true;
+              console.log('New content detected for:', freshUrl.name);
+              console.log('Old:', oldTitle);
+              console.log('New:', newTitle);
+            }
+            
+            freshUrl.lastContent = newTitle;
           }
+
+          freshUrl.latestItems = latestItems;
+          freshUrl.lastChecked = new Date().toISOString();
+          freshUrl.isChecking = false; // Clear checking flag
+
+          chrome.storage.local.set({ urls: freshUrls }, () => {
+            if (hasNewContent) {
+              showNotification(freshUrl);
+            }
+          });
         });
       })
       .catch(error => {
         console.error('Error checking', url?.url, ':', error);
+        
+        // Clear checking flag on error
+        chrome.storage.local.get('urls', errorData => {
+          const errorUrls = errorData.urls || [];
+          const errorUrl = errorUrls.find(u => u.id === urlId);
+          if (errorUrl) {
+            errorUrl.isChecking = false;
+            chrome.storage.local.set({ urls: errorUrls });
+          }
+        });
       });
   });
 }
 
 function showNotification(url) {
   const latestTitle = url.latestItems && url.latestItems[0] ? url.latestItems[0].title : 'Ada konten baru!';
-  chrome.notifications.create({
+  const notificationId = `rss_${url.id}_${Date.now()}`;
+  
+  chrome.notifications.create(notificationId, {
     type: 'basic',
     iconUrl: '/assets/icon48.png',
-    title: url.name,
+    title: `📰 ${url.name}`,
     message: latestTitle,
     priority: 1
   });
+
+  console.log('Notification shown for:', url.name, '- Title:', latestTitle);
 }
