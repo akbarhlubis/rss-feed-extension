@@ -161,3 +161,28 @@ input {
   color: red;
   margin-top: 4px;
 }
+
+.header-url{
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+#collapse-urls {
+  background-color: #e0e0e0;
+  color: #333;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+#collapse-urls:hover {
+  background-color: #d5d5d5;
+}
+
+.collapsed {
+  display: none;
+}

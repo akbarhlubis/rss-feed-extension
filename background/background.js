@@ -34,7 +34,7 @@ function scheduleCheck(url) {
     delayInMinutes: url.interval,
     periodInMinutes: url.interval
   });
-  // Cek awal langsung
+  // check immediately after scheduling
   checkUrl(url.id);
 }
 
@@ -43,45 +43,123 @@ function cancelCheck(id) {
   chrome.alarms.clear(alarmName);
 }
 
-// Helper: Hilangkan tag HTML sederhana
+// Helper: Remove HTML tags and trim whitespace
 function stripHtmlTags(str) {
-  return str.replace(/<[^>]+>/g, '').trim();
+  if (!str) return '';
+  return str.replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1')  // Handle CDATA
+           .replace(/&lt;/g, '<')
+           .replace(/&gt;/g, '>')
+           .replace(/&quot;/g, '"')
+           .replace(/&amp;/g, '&')
+           .replace(/<[^>]+>/g, '')
+           .trim();
 }
 
 function parseXML(xmlText) {
   const items = [];
-  const atomEntryRegex = /<entry>([\s\S]*?)<\/entry>/g;
-  let entryMatch;
+  let isAtom = xmlText.includes('<entry>');
+  let isRSS = xmlText.includes('<item>');
+  
+  if (!isAtom && !isRSS) {
+    console.error('Format tidak dikenali: bukan RSS atau Atom');
+    return items;
+  }
 
-  while ((entryMatch = atomEntryRegex.exec(xmlText)) !== null) {
-    const entryContent = entryMatch[1];
+  // if format is Atom
+  if (isAtom) {
+    const atomEntryRegex = /<entry>([\s\S]*?)<\/entry>/g;
+    let entryMatch;
 
-    // Title
-    const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(entryContent);
-    const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, '').trim() : '';
+    while ((entryMatch = atomEntryRegex.exec(xmlText)) !== null) {
+      const entryContent = entryMatch[1];
 
-    // Link
-    const linkMatch = /<link[^>]*href="([^"]*)"[^>]*>/i.exec(entryContent);
-    const link = linkMatch ? linkMatch[1] : '';
+      // Title
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(entryContent);
+      const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
 
-    // PubDate
-    const dateMatch = /<(updated|published)[^>]*>([\s\S]*?)<\/(updated|published)>/i.exec(entryContent);
-    const pubDate = dateMatch ? dateMatch[2].trim() : '';
+      // Link
+      const linkMatch = /<link[^>]*href="([^"]*)"[^>]*>/i.exec(entryContent);
+      const link = linkMatch ? linkMatch[1] : '';
 
-    // Blockquote from Blockquote
-    let blockquote = '';
-    const summaryMatch = /<summary[^>]*>([\s\S]*?)<\/summary>/i.exec(entryContent);
-    if (summaryMatch) {
-      // Cari <div class="blockquote">...</div>
-      const blockquoteMatch = /<div class="blockquote[^>]*>([\s\S]*?)<\/div>/i.exec(summaryMatch[1]);
-      if (blockquoteMatch) {
-        blockquote = blockquoteMatch[1].replace(/<[^>]+>/g, '').trim();
+      // PubDate
+      const dateMatch = /<(updated|published)[^>]*>([\s\S]*?)<\/(updated|published)>/i.exec(entryContent);
+      const pubDate = dateMatch ? dateMatch[2].trim() : '';
+
+      // Author & Blockquote
+      let blockquote = '';
+      let author = '';
+      const summaryMatch = /<summary[\s\S]*?>([\s\S]*?)<\/summary>/i.exec(entryContent);
+      if (summaryMatch) {
+        // looking for <div class="blockquote">...</div>
+        const blockquoteMatch = /<div class="blockquote[^>]*>([\s\S]*?)<\/div>/i.exec(summaryMatch[1]);
+        if (blockquoteMatch) {
+          blockquote = stripHtmlTags(blockquoteMatch[1]);
+
+          // Take <strong>...</strong>
+          const strongMatch = /<strong[^>]*>(.*?)<\/strong>/i.exec(summaryMatch[1]);
+          if (strongMatch) {
+            author = stripHtmlTags(strongMatch[1]);
+          }
+        }
       }
+
+      // If author is not found in blockquote, try to find it in author tag
+      if (!author) {
+        const authorMatch = /<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/i.exec(entryContent);
+        if (authorMatch) {
+          author = stripHtmlTags(authorMatch[1]);
+        }
+      }
+
+      items.push({ title, link, pubDate, author, blockquote });
+
+      if (items.length >= 3) break;
     }
+  }
 
-    items.push({ title, link, pubDate, blockquote });
+  // If format is RSS
+  else if (isRSS) {
+    const rssItemRegex = /<item>([\s\S]*?)<\/item>/g;
+    let itemMatch;
 
-    if (items.length >= 3) break;
+    while ((itemMatch = rssItemRegex.exec(xmlText)) !== null) {
+      const itemContent = itemMatch[1];
+
+      // Title
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(itemContent);
+      const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
+
+      // Link
+      const linkMatch = /<link[^>]*>([\s\S]*?)<\/link>/i.exec(itemContent);
+      const link = linkMatch ? linkMatch[1].trim() : '';
+
+      // PubDate - RSS using format RFC 822
+      const dateMatch = /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i.exec(itemContent);
+      const pubDate = dateMatch ? dateMatch[1].trim() : '';
+
+      // Description as blockquote
+      let blockquote = '';
+      const descMatch = /<description[^>]*>([\s\S]*?)<\/description>/i.exec(itemContent);
+      if (descMatch) {
+        blockquote = stripHtmlTags(descMatch[1]);
+      }
+
+      // Author - RSS can use <dc:creator> or <author>
+      let author = '';
+      const dcCreatorMatch = /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i.exec(itemContent);
+      if (dcCreatorMatch) {
+        author = stripHtmlTags(dcCreatorMatch[1]);
+      } else {
+        const authorMatch = /<author[^>]*>([\s\S]*?)<\/author>/i.exec(itemContent);
+        if (authorMatch) {
+          author = stripHtmlTags(authorMatch[1]);
+        }
+      }
+
+      items.push({ title, link, pubDate, author, blockquote });
+
+      if (items.length >= 3) break;
+    }
   }
 
   return items;

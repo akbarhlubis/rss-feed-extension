@@ -102,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
           </ul>
         </div>
         <div class="btn-group">
-          <button class="check-btn">Cek Sekarang</button>
+          <button class="check-btn">Check Now</button>
           <button class="delete-btn">Delete</button>
         </div>
       `;
@@ -128,4 +128,23 @@ document.addEventListener('DOMContentLoaded', function() {
       displayUrls(changes.urls.newValue || []);
     }
   });
+});
+
+// default is to collapse the URLs section
+document.addEventListener('DOMContentLoaded', function() {
+  const urlsList = document.querySelector('#urls-list');
+  urlsList.classList.add('collapsed');
+  document.getElementById('collapse-urls').textContent = 'Open';
+});
+
+// handle collapse/expand URLs section
+document.getElementById('collapse-urls').addEventListener('click', function() {
+  const urlsList = document.querySelector('#urls-list');
+  if (urlsList.classList.contains('collapsed')) {
+    urlsList.classList.remove('collapsed');
+    this.textContent = 'Close';
+  } else {
+    urlsList.classList.add('collapsed');
+    this.textContent = 'Open';
+  }
 });
