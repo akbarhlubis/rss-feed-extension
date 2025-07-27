@@ -1,4 +1,8 @@
+![RSS Warrior](assets/icon128.png)
+
 # RSS Feed Warrior
+
+> This extension monitors RSS feeds for changes and sends notifications
 
 ![Demo RSS Warrior](demo.gif)
 
