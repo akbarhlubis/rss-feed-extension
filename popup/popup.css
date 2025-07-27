@@ -1,48 +1,67 @@
 * {
   box-sizing: border-box;
 }
+
 body {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   font-size: 14px;
   color: #333;
+  background: #fff;
 }
+
 .container {
   width: 350px;
   padding: 16px;
 }
+
 h1 {
   text-align: center;
-  color: #2c3e50;
+  color: #c0392b;
   margin-bottom: 16px;
   font-size: 18px;
 }
+
 h2 {
   font-size: 16px;
-  color: #34495e;
+  color: #e74c3c;
   margin-bottom: 8px;
 }
+
 .add-url-section, .urls-section {
-  background-color: #f9f9f9;
+  background-color: #fdf2f2;
+  border: 1px solid #fadbd8;
   border-radius: 6px;
   padding: 12px;
   margin-bottom: 16px;
 }
+
 .input-group {
   margin-bottom: 10px;
 }
+
 label {
   display: block;
   margin-bottom: 3px;
   font-weight: 500;
+  color: #922b21;
 }
+
 input {
   width: 100%;
   padding: 8px;
-  border: 1px solid #ddd;
+  border: 1px solid #f1948a;
   border-radius: 4px;
+  transition: border-color 0.2s;
 }
+
+input:focus {
+  outline: none;
+  border-color: #e74c3c;
+  box-shadow: 0 0 0 2px rgba(231, 76, 60, 0.2);
+}
+
 .btn {
-  background-color: #3498db;
+  background-color: #e74c3c;
   color: white;
   border: none;
   padding: 8px 12px;
@@ -50,89 +69,110 @@ input {
   cursor: pointer;
   font-weight: 500;
   width: 100%;
+  transition: background-color 0.2s;
 }
+
 .btn:hover {
-  background-color: #2980b9;
+  background-color: #c0392b;
 }
+
 .url-item {
   background-color: white;
-  border: 1px solid #ddd;
+  border: 1px solid #f1948a;
   border-radius: 4px;
   padding: 10px;
   margin-bottom: 8px;
   position: relative;
+  box-shadow: 0 1px 3px rgba(231, 76, 60, 0.1);
 }
+
 .url-name {
   font-weight: bold;
   margin-bottom: 4px;
+  color: #922b21;
 }
+
 .url-details {
   font-size: 12px;
   color: #666;
 }
+
 .no-urls {
   text-align: center;
-  color: #999;
+  color: #cd6155;
   padding: 12px 0;
 }
+
 .rss-latest {
   margin-top: 8px;
-  background: #eef6fc;
+  background: #fff5f5;
+  border: 1px solid #fadbd8;
   border-radius: 4px;
   padding: 8px 8px 4px 8px;
   font-size: 13px;
 }
+
 .rss-latest strong {
-  color: #2c3e50;
+  color: #922b21;
   font-size: 13px;
 }
+
 .rss-latest ul {
   margin-top: 4px;
   padding-left: 18px;
   list-style-type: disc;
 }
+
 .rss-latest li {
   margin-bottom: 7px;
   font-size: 13px;
 }
+
 .rss-latest a {
-  color: #2980b9;
+  color: #e74c3c;
   text-decoration: none;
   transition: color 0.2s;
   word-break: break-word;
 }
+
 .rss-latest a:hover {
   text-decoration: underline;
-  color: #1a5276;
+  color: #c0392b;
 }
+
 .rss-date {
   display: block;
   font-size: 11px;
   color: #888;
   margin-left: 2px;
 }
+
 .rss-author {
   color: #666;
   font-size: 12px;
   margin-top: 2px;
 }
+
 .rss-blockquote {
-  background: #f5f5f5;
-  border-left: 3px solid #bbb;
+  background: #fef9e7;
+  border-left: 3px solid #e74c3c;
   padding: 6px 10px;
   margin: 4px 0 4px 0;
   font-size: 12px;
   color: #444;
 }
+
 .btn-group {
   display: flex;
   gap: 8px;
   margin-top: 8px;
   justify-content: flex-end;
 }
+
 .check-btn {
-  background-color: #27ae60;
-  color: white;
+  background-color: white;
+  outline: 1px solid #e74c3c;
+  color: #e74c3c;
   border: none;
   padding: 6px 10px;
   border-radius: 4px;
@@ -140,29 +180,34 @@ input {
   font-size: 12px;
   transition: background 0.2s;
 }
+
 .check-btn:hover {
-  background-color: #219150;
+  background-color: #c0392b;
+  color: white;
 }
+
 .delete-btn {
-  background-color: #e74c3c;
+  background-color: #a93226;
   color: white;
   border: none;
   border-radius: 4px;
   padding: 6px 10px;
   font-size: 12px;
   cursor: pointer;
+  transition: background 0.2s;
 }
+
 .delete-btn:hover {
-  background-color: #c0392b;
+  background-color: #922b21;
 }
 
 .input-hint {
   font-size: 10px;
-  color: red;
+  color: #e74c3c;
   margin-top: 4px;
 }
 
-.header-url{
+.header-url {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -170,17 +215,18 @@ input {
 }
 
 #collapse-urls {
-  background-color: #e0e0e0;
-  color: #333;
-  border: none;
+  background-color: #fadbd8;
+  color: #922b21;
+  border: 1px solid #f1948a;
   padding: 6px 10px;
   border-radius: 4px;
   cursor: pointer;
   font-size: 12px;
+  transition: background-color 0.2s;
 }
 
 #collapse-urls:hover {
-  background-color: #d5d5d5;
+  background-color: #f5b7b1;
 }
 
 .collapsed {
@@ -192,6 +238,8 @@ input {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #fadbd8;
 }
 
 .header-icons {
@@ -202,7 +250,7 @@ input {
 .icon-btn {
   background: none;
   border: none;
-  color: #3498db;
+  color: #e74c3c;
   font-size: 20px;
   padding: 3px 6px;
   border-radius: 4px;
@@ -213,8 +261,8 @@ input {
 }
 
 .icon-btn:hover, .icon-btn:focus {
-  background: #eaf3fb;
-  color: #21618c;
+  background: #fdf2f2;
+  color: #c0392b;
   outline: none;
 }
 
@@ -224,4 +272,55 @@ input {
 
 .icon-btn.trakteer {
   color: #e74c3c;
+}
+
+.header-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.header-title {
+  margin: 0;
+  font-size: 18px;
+  color: #c0392b;
+}
+
+.icon-btn.trakteer:hover {
+  color: #c0392b;
+  background: #fdf2f2;
+}
+
+.version {
+  font-size: 11px;
+  color: #922b21;
+  background: #fadbd8;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 500;
+  align-self: flex-start;
+}
+
+.footer {
+  text-align: center;
+  font-size: 12px;
+  color: #cd6155;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid #fadbd8;
+}
+
+.trakteer {
+  animation: trakteer 0.5s infinite;
+}
+
+.trakteer:hover {
+  animation: none;
+  transform: scale(1.05);
+}
+
+@keyframes trakteer {
+  from, to { transform: scale(1, 1); }
+  25% { transform: scale(0.9, 1.1); }
+  50% { transform: scale(1.1, 0.9); }
+  75% { transform: scale(0.95, 1.05); }
 }

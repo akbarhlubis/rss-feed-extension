@@ -102,8 +102,8 @@ document.addEventListener('DOMContentLoaded', function() {
           </ul>
         </div>
         <div class="btn-group">
-          <button class="check-btn">Check Now</button>
-          <button class="delete-btn">Delete</button>
+          <button class="check-btn">Check Now <i class="bi bi-search"></i></button>
+          <button class="delete-btn">Delete <i class="bi bi-trash"></i></button>
         </div>
       `;
 
@@ -166,7 +166,7 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         
         // Reset button to normal
-        checkUpdateBtn.textContent = "Check for Update";
+        checkUpdateBtn.innerHTML = '<i class="bi bi-arrow-repeat"></i>';
         checkUpdateBtn.disabled = false;
       })
       .catch(error => {
@@ -206,6 +206,17 @@ document.addEventListener('DOMContentLoaded', function() {
     
     return 0; // Versi sama
   }
+
+  // Helper: show version from manifest
+  function displayVersion() {
+    const manifest = chrome.runtime.getManifest();
+    const versionElement = document.querySelector('.version');
+    if (versionElement && manifest.version) {
+      versionElement.textContent = `v${manifest.version}`;
+    }
+  }
+
+  displayVersion();
 });
 
 // handle collapse/expand URLs section
