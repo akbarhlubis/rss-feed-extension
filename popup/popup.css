@@ -186,3 +186,42 @@ input {
 .collapsed {
   display: none;
 }
+
+.header-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.header-icons {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-btn {
+  background: none;
+  border: none;
+  color: #3498db;
+  font-size: 20px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  display: flex;
+  align-items: center;
+}
+
+.icon-btn:hover, .icon-btn:focus {
+  background: #eaf3fb;
+  color: #21618c;
+  outline: none;
+}
+
+.icon-btn i {
+  pointer-events: none;
+}
+
+.icon-btn.trakteer {
+  color: #e74c3c;
+}

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "RSS Notifier",
-  "version": "1.1.0",
+  "name": "RSS Feed Warrior",
+  "version": "1.2.0",
   "description": "Get notifications from your favorite websites at specified intervals, inspired by Collie Notifier App and FeedBro Extension.",
   "icons": {
   "16": "assets/icon16.png",

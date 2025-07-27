@@ -128,13 +128,84 @@ document.addEventListener('DOMContentLoaded', function() {
       displayUrls(changes.urls.newValue || []);
     }
   });
-});
 
-// default is to collapse the URLs section
-document.addEventListener('DOMContentLoaded', function() {
-  const urlsList = document.querySelector('#urls-list');
+  // Collapse/Expand URLs section
   urlsList.classList.add('collapsed');
   document.getElementById('collapse-urls').textContent = 'Open';
+
+  // Check for Updates button
+  const checkUpdateBtn = document.getElementById('check-update-btn');
+  checkUpdateBtn.addEventListener('click', checkForUpdates);
+
+  function checkForUpdates() {
+    // Change this URL to your GitHub repository releases atom feed URL
+    const githubReleasesURL = "https://github.com/akbarhlubis/rss-feed-extension/releases.atom";
+    
+    // Change button appearance during the process
+    checkUpdateBtn.textContent = "Checking...";
+    checkUpdateBtn.disabled = true;
+    
+    fetch(githubReleasesURL)
+      .then(response => response.text())
+      .then(xmlText => {
+        // Parse Atom feed for latest release
+        const latestVersion = parseGithubReleaseFeed(xmlText);
+        
+        // Read extension version from manifest.json - NO .then() NEEDED
+        const manifest = chrome.runtime.getManifest();
+        const currentVersion = manifest.version;
+        
+        if (latestVersion && compareVersions(latestVersion, currentVersion) > 0) {
+          // New version available
+          if (confirm(`New version ${latestVersion} available! Your version: ${currentVersion}. Open download page?`)) {
+            chrome.tabs.create({ url: "https://github.com/akbarhlubis/rss-feed-extension/releases/latest" });
+          }
+        } else {
+          // Version is up to date
+          alert("You are using the latest version.");
+        }
+        
+        // Reset button to normal
+        checkUpdateBtn.textContent = "Check for Update";
+        checkUpdateBtn.disabled = false;
+      })
+      .catch(error => {
+        console.error("Error checking for updates:", error);
+        alert("Failed to check for updates. Please try again later.");
+        
+        // Reset button to normal
+        checkUpdateBtn.textContent = "Check for Update";
+        checkUpdateBtn.disabled = false;
+      });
+  }
+  
+  function parseGithubReleaseFeed(xmlText) {
+    // Parsing GitHub Releases Atom feed
+    const entryMatch = /<entry>[\s\S]*?<title>([^<]*)<\/title>[\s\S]*?<\/entry>/i.exec(xmlText);
+    if (entryMatch && entryMatch[1]) {
+      // Biasanya format title adalah "v1.0.0" atau hanya "1.0.0"
+      const versionText = entryMatch[1].trim();
+      // Remove 'v' prefix jika ada
+      return versionText.startsWith('v') ? versionText.substring(1) : versionText;
+    }
+    return null;
+  }
+  
+  function compareVersions(v1, v2) {
+    // Split versi berdasarkan titik, lalu bandingkan numerik
+    const v1parts = v1.split('.').map(Number);
+    const v2parts = v2.split('.').map(Number);
+    
+    for (let i = 0; i < Math.max(v1parts.length, v2parts.length); i++) {
+      const v1part = i < v1parts.length ? v1parts[i] : 0;
+      const v2part = i < v2parts.length ? v2parts[i] : 0;
+      
+      if (v1part > v2part) return 1;
+      if (v1part < v2part) return -1;
+    }
+    
+    return 0; // Versi sama
+  }
 });
 
 // handle collapse/expand URLs section

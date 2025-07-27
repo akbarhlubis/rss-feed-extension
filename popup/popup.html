@@ -5,10 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>RSS Notifier</title>
   <link rel="stylesheet" href="popup.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
 </head>
 <body>
   <div class="container">
-    <h1>RSS Notifier</h1>
+    <div class="header-container">
+      <h1 class="header-title extension-name">RSS Feed Warrior</h1>
+        <div class="header-icons">
+          <a href="https://trakteer.id/akbarhlubis/tip" class="icon-btn trakteer" target="_blank" title="Donate">
+            <i class="bi bi-heart-fill"></i>
+          </a>
+          <button id="check-update-btn" class="icon-btn" title="Check for Update">
+            <i class="bi bi-arrow-repeat"></i>
+          </button>
+        </div>
+    </div>
     
     <div class="add-url-section">
       <h2>Add URL</h2>
