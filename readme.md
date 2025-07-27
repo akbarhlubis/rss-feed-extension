@@ -1,6 +1,6 @@
-# RSS Notifier
+# RSS Feed Warrior
 
-![Demo RSS Notifier](demo.gif)
+![Demo RSS Warrior](demo.gif)
 
 A Chrome extension inspired by the collie-reader/collie repository and serving as an alternative to Feedbro, my favorite Google Chrome extension (which is no longer supported on Chrome). This extension monitors RSS feeds for changes and sends notifications.
 
@@ -17,7 +17,7 @@ A Chrome extension inspired by the collie-reader/collie repository and serving a
 2. Open Chrome and navigate to `chrome://extensions/`
 3. Enable "Developer mode" in the top right
 4. Click "Load unpacked" and select the extension directory
-5. RSS Notifier extension should now be installed
+5. RSS Feed Warrior extension should now be installed
 
 ## Usage
 
