@@ -229,8 +229,18 @@ input:focus {
   background-color: #f5b7b1;
 }
 
-.collapsed {
-  display: none;
+
+#urls-list.collapsed {
+  /* display: none; */
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.2s ease-out;
+}
+
+#urls-list {
+  max-height: 600px; /* Adjust as needed */
+  overflow-y: auto;
+  transition: max-height 0.2s ease-in;
 }
 
 .header-container {

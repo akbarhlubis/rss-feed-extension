@@ -12,10 +12,30 @@ document.addEventListener('DOMContentLoaded', function() {
     const interval = parseInt(document.getElementById('interval-input').value);
 
     if (url && name && interval) {
-      addUrl(url, name, interval);
-      addUrlForm.reset();
+      checkDuplicateURL(url, name, interval);
     }
   });
+
+  function checkDuplicateURL(url, name, interval) {
+    chrome.storage.local.get('urls', function(data) {
+      const urls = data.urls || [];
+      const isDuplicate = urls.some(item => item.url === url);
+      if (isDuplicate) {
+        // alert('URL ' + name + ' sudah ada dalam daftar.');
+        Toastify({
+          text: `URL ${name} is already on the list.`,
+          duration: 3000,
+          close: true,
+          gravity: 'bottom',
+          position: 'right',
+        }).showToast();
+      }
+      else {
+        addUrl(url, name, interval);
+        addUrlForm.reset();
+      }
+    });
+  }
 
   function loadUrls() {
     chrome.storage.local.get('urls', function(data) {
@@ -162,7 +182,14 @@ document.addEventListener('DOMContentLoaded', function() {
           }
         } else {
           // Version is up to date
-          alert("You are using the latest version.");
+          // alert("You are using the latest version.");
+          Toastify({
+            text: "You are using the latest version.",
+            duration: 3000,
+            close: true,
+            gravity: 'bottom',
+            position: 'right',
+          }).showToast();
         }
         
         // Reset button to normal
@@ -171,7 +198,14 @@ document.addEventListener('DOMContentLoaded', function() {
       })
       .catch(error => {
         console.error("Error checking for updates:", error);
-        alert("Failed to check for updates. Please try again later.");
+        // alert("Failed to check for updates. Please try again later.");
+        Toastify({
+          text: "Failed to check for updates. Please try again later.",
+          duration: 3000,
+          close: true,
+          gravity: 'bottom',
+          position: 'right',
+        }).showToast();
         
         // Reset button to normal
         checkUpdateBtn.textContent = "Check for Update";
