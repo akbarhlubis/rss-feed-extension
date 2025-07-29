@@ -171,71 +171,77 @@ function checkUrl(urlId) {
     const url = urls.find(u => u.id === urlId);
     if (!url) return;
 
-    // Prevent multiple simultaneous checks for same URL
-    if (url.isChecking) {
-      console.log('Already checking URL:', url.name);
-      return;
-    }
+    // Prevent multiple simultaneous checks for same URL using atomic update
+    chrome.storage.local.get('urls', freshData => {
+      const freshUrls = freshData.urls || [];
+      const freshUrl = freshUrls.find(u => u.id === urlId);
+      if (!freshUrl) return;
 
-    // Mark as checking
-    url.isChecking = true;
-    chrome.storage.local.set({ urls: urls });
+      if (freshUrl.isChecking) {
+        console.log('Check already in progress for URL:', freshUrl.name);
+        return;
+      }
 
-    fetch(url.url)
-      .then(response => response.text())
-      .then(xmlText => {
-        const latestItems = parseXML(xmlText);
+      // Mark as checking
+      freshUrl.isChecking = true;
+      chrome.storage.local.set({ urls: freshUrls }, () => {
+        fetch(freshUrl.url)
+          .then(response => response.text())
+          .then(xmlText => {
+            const latestItems = parseXML(xmlText);
 
-        // Get fresh data to avoid race conditions
-        chrome.storage.local.get('urls', freshData => {
-          const freshUrls = freshData.urls || [];
-          const freshUrl = freshUrls.find(u => u.id === urlId);
-          if (!freshUrl) return;
+            // Get fresh data to avoid race conditions
+            chrome.storage.local.get('urls', newestData => {
+              const newestUrls = newestData.urls || [];
+              const newestUrl = newestUrls.find(u => u.id === urlId);
+              if (!newestUrl) return;
 
-          let hasNewContent = false;
-          
-          if (latestItems.length > 0) {
-            const newTitle = latestItems[0].title;
-            const oldTitle = freshUrl.lastContent;
-            
-            // Only trigger notification if:
-            // 1. We have a previous title to compare with
-            // 2. The new title is different from the old one
-            // 3. The new title is not empty
-            if (oldTitle && newTitle && oldTitle !== newTitle) {
-              hasNewContent = true;
-              console.log('New content detected for:', freshUrl.name);
-              console.log('Old:', oldTitle);
-              console.log('New:', newTitle);
-            }
-            
-            freshUrl.lastContent = newTitle;
-          }
+              let hasNewContent = false;
 
-          freshUrl.latestItems = latestItems;
-          freshUrl.lastChecked = new Date().toISOString();
-          freshUrl.isChecking = false; // Clear checking flag
+              if (latestItems.length > 0) {
+                const newTitle = latestItems[0].title;
+                const oldTitle = newestUrl.lastContent;
 
-          chrome.storage.local.set({ urls: freshUrls }, () => {
-            if (hasNewContent) {
-              showNotification(freshUrl);
-            }
+                // Only trigger notification if:
+                // 1. We have a previous title to compare with
+                // 2. The new title is different from the old one
+                // 3. The new title is not empty
+                if (oldTitle && newTitle && oldTitle !== newTitle) {
+                  hasNewContent = true;
+                  console.log('New content detected for:', newestUrl.name);
+                  console.log('Old:', oldTitle);
+                  console.log('New:', newTitle);
+                }
+
+                newestUrl.lastContent = newTitle;
+              }
+
+              newestUrl.latestItems = latestItems;
+              newestUrl.lastChecked = new Date().toISOString();
+              newestUrl.isChecking = false; // Clear checking flag
+
+              chrome.storage.local.set({ urls: newestUrls }, () => {
+                if (hasNewContent) {
+                  showNotification(newestUrl);
+                }
+              });
+            });
+          })
+          .catch(error => {
+            console.error('Error checking', freshUrl.url, ':', error);
+
+            // Clear checking flag on error
+            chrome.storage.local.get('urls', errorData => {
+              const errorUrls = errorData.urls || [];
+              const errorUrl = errorUrls.find(u => u.id === urlId);
+              if (errorUrl) {
+                errorUrl.isChecking = false;
+                chrome.storage.local.set({ urls: errorUrls });
+              }
+            });
           });
-        });
-      })
-      .catch(error => {
-        console.error('Error checking', url?.url, ':', error);
-        
-        // Clear checking flag on error
-        chrome.storage.local.get('urls', errorData => {
-          const errorUrls = errorData.urls || [];
-          const errorUrl = errorUrls.find(u => u.id === urlId);
-          if (errorUrl) {
-            errorUrl.isChecking = false;
-            chrome.storage.local.set({ urls: errorUrls });
-          }
-        });
       });
+    });
   });
 }
 
