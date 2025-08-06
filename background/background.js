@@ -177,10 +177,11 @@ function checkUrl(urlId) {
       const freshUrl = freshUrls.find(u => u.id === urlId);
       if (!freshUrl) return;
 
-      if (freshUrl.isChecking) {
-        console.log('Check already in progress for URL:', freshUrl.name);
-        return;
-      }
+      // temporary disable checking because stuck in checking
+      // if (freshUrl.isChecking) {
+      //   console.log('Check already in progress for URL:', freshUrl.name);
+      //   return;
+      // }
 
       // Mark as checking
       freshUrl.isChecking = true;
