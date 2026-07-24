@@ -135,6 +135,12 @@ h2 { font-size: var(--text-lg); color: var(--color-primary-darker); }
   margin-bottom: var(--sp-3);
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+}
+
 /* ── Buttons ────────────────────────────────────────────────── */
 .btn {
   display: inline-flex;

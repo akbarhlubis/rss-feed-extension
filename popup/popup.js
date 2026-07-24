@@ -8,6 +8,9 @@ document.addEventListener('DOMContentLoaded', function () {
   const searchInput = document.getElementById('search-input');
   const filterSelect = document.getElementById('filter-select');
   const checkUpdateBtn = document.getElementById('check-update-btn');
+  const exportBtn = document.getElementById('export-btn');
+  const importBtn = document.getElementById('import-btn');
+  const importFileInput = document.getElementById('import-file-input');
 
   // ── State ────────────────────────────────────────────────────────
   let allUrls = [];   // Master copy from storage
@@ -43,6 +46,11 @@ document.addEventListener('DOMContentLoaded', function () {
     filterValue = this.value;
     renderUrls();
   });
+
+  // ── Export & Import ──────────────────────────────────────────────
+  exportBtn.addEventListener('click', exportFeeds);
+  importBtn.addEventListener('click', () => importFileInput.click());
+  importFileInput.addEventListener('change', handleImportFile);
 
   // ── Add Feed Form ────────────────────────────────────────────────
   addUrlForm.addEventListener('submit', function (event) {
@@ -470,18 +478,119 @@ document.addEventListener('DOMContentLoaded', function () {
     return null;
   }
 
-  function compareVersions(v1, v2) {
-    if (!v1 || !v2) return 0;
-    const cleanV1 = String(v1).replace(/[^0-9.]/g, '');
-    const cleanV2 = String(v2).replace(/[^0-9.]/g, '');
-    const a = cleanV1.split('.').map(Number);
-    const b = cleanV2.split('.').map(Number);
-    for (let i = 0; i < Math.max(a.length, b.length); i++) {
-      const p1 = isNaN(a[i]) ? 0 : a[i];
-      const p2 = isNaN(b[i]) ? 0 : b[i];
-      if (p1 > p2) return 1;
-      if (p1 < p2) return -1;
+  // ════════════════════════════════════════════════════════════════
+  // EXPORT & IMPORT
+  // ════════════════════════════════════════════════════════════════
+
+  function exportFeeds() {
+    if (allUrls.length === 0) {
+      showToast('No feeds to export.');
+      return;
     }
-    return 0;
+
+    const exportData = {
+      version: chrome.runtime.getManifest().version,
+      exportedAt: new Date().toISOString(),
+      feeds: allUrls.map(u => ({
+        name: u.name,
+        url: u.url,
+        interval: u.interval,
+        isPaused: u.isPaused || false
+      }))
+    };
+
+    const jsonStr = JSON.stringify(exportData, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    const dateStr = new Date().toISOString().slice(0, 10);
+    const a = document.createElement('a');
+    a.href = blobUrl;
+    a.download = `rss-feed-warrior-backup-${dateStr}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(blobUrl);
+
+    showToast(`Exported ${allUrls.length} feed(s) successfully.`);
+  }
+
+  function handleImportFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        const content = e.target.result;
+        const data = JSON.parse(content);
+
+        let importedFeeds = [];
+        if (Array.isArray(data)) {
+          importedFeeds = data;
+        } else if (data && Array.isArray(data.feeds)) {
+          importedFeeds = data.feeds;
+        } else {
+          showToast('Invalid JSON file format.');
+          return;
+        }
+
+        let addedCount = 0;
+        let skippedCount = 0;
+        const now = Date.now();
+
+        importedFeeds.forEach((item, index) => {
+          const rawUrl = item.url ? String(item.url).trim() : '';
+          const rawName = item.name ? String(item.name).trim() : '';
+          const rawInterval = parseInt(item.interval, 10);
+
+          if (!rawUrl || !rawName || isNaN(rawInterval) || rawInterval < 1) {
+            return;
+          }
+
+          if (!rawUrl.startsWith('http://') && !rawUrl.startsWith('https://')) {
+            return;
+          }
+
+          const exists = allUrls.some(u => u.url === rawUrl);
+          if (exists) {
+            skippedCount++;
+          } else {
+            const newFeed = {
+              id: now + index,
+              url: rawUrl,
+              name: rawName,
+              interval: rawInterval,
+              lastChecked: null,
+              lastContent: null,
+              latestItems: [],
+              isPaused: item.isPaused === true,
+              hasNew: false,
+              isError: false,
+              isChecking: false
+            };
+            allUrls.push(newFeed);
+            chrome.runtime.sendMessage({ action: 'scheduleCheck', url: newFeed });
+            addedCount++;
+          }
+        });
+
+        if (addedCount > 0) {
+          chrome.storage.local.set({ urls: allUrls }, function () {
+            renderUrls();
+            showToast(`Imported ${addedCount} feed(s). (${skippedCount} skipped)`);
+          });
+        } else {
+          showToast(`No new feeds added. (${skippedCount} skipped/duplicate)`);
+        }
+      } catch (err) {
+        console.error('Import error:', err);
+        showToast('Failed to parse JSON file.');
+      } finally {
+        event.target.value = '';
+      }
+    };
+
+    reader.readAsText(file);
   }
 });

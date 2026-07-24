@@ -40,6 +40,13 @@
       <div class="section-header">
         <h2>Feeds</h2>
         <div class="section-actions">
+          <button id="export-btn" class="icon-btn" title="Export Feeds" aria-label="Export feeds to JSON">
+            <i class="bi bi-download" aria-hidden="true"></i>
+          </button>
+          <button id="import-btn" class="icon-btn" title="Import Feeds" aria-label="Import feeds from JSON">
+            <i class="bi bi-upload" aria-hidden="true"></i>
+          </button>
+          <input type="file" id="import-file-input" accept=".json" hidden>
           <button id="add-feed-toggle-btn" class="btn btn-sm btn-outline" aria-expanded="false" aria-controls="add-url-section">
             <i class="bi bi-plus-lg" aria-hidden="true"></i> Add Feed
           </button>
