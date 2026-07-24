@@ -2,6 +2,10 @@ chrome.runtime.onInstalled.addListener(() => {
   setupAlarms();
 });
 
+chrome.runtime.onStartup.addListener(() => {
+  setupAlarms();
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'scheduleCheck') {
     scheduleCheck(message.url);
@@ -9,26 +13,94 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     cancelCheck(message.id);
   } else if (message.action === 'manualCheck') {
     checkUrl(message.id);
+  } else if (message.action === 'pauseCheck') {
+    cancelCheck(message.id);
+  } else if (message.action === 'resumeCheck') {
+    chrome.storage.local.get('urls', data => {
+      const url = (data.urls || []).find(u => u.id === message.id);
+      if (url) scheduleCheck(url);
+    });
+  } else if (message.action === 'checkLatestVersion') {
+    // Fetch from background — MV3 popup cannot reliably fetch cross-origin URLs
+    const currentVersion = chrome.runtime.getManifest().version;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    fetch('https://github.com/akbarhlubis/rss-feed-extension/releases.atom', {
+      signal: controller.signal
+    })
+      .then(r => r.text())
+      .then(xmlText => {
+        clearTimeout(timeout);
+        const latestVersion = parseGithubReleaseFeed(xmlText);
+        sendResponse({ success: true, latestVersion, currentVersion });
+      })
+      .catch(err => {
+        clearTimeout(timeout);
+        console.error('checkLatestVersion fetch error:', err.message);
+        sendResponse({ success: false, error: err.message });
+      });
+
+    return true; // keep message channel open for async sendResponse
   }
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name.startsWith('check_url_')) {
-    const urlId = parseInt(alarm.name.split('_')[2]);
+    const urlId = parseInt(alarm.name.split('_')[2], 10);
     checkUrl(urlId);
   }
 });
+
+// Handle notification clicks — open the latest article link
+chrome.notifications.onClicked.addListener((notificationId) => {
+  if (!notificationId.startsWith('rss_')) return;
+
+  const urlId = parseInt(notificationId.split('_')[1], 10);
+  if (isNaN(urlId)) return;
+
+  chrome.storage.local.get('urls', (data) => {
+    const urls = data.urls || [];
+    const url = urls.find(u => u.id === urlId);
+    const link = url?.latestItems?.[0]?.link;
+
+    if (link && (link.startsWith('http://') || link.startsWith('https://'))) {
+      chrome.tabs.create({ url: link });
+    } else {
+      // Fallback: open the feed source URL
+      if (url?.url) chrome.tabs.create({ url: url.url });
+    }
+  });
+
+  // Dismiss the notification after click
+  chrome.notifications.clear(notificationId);
+});
+
+// Parse the latest semver tag from a GitHub releases Atom feed
+function parseGithubReleaseFeed(xmlText) {
+  // GitHub release titles are like: "RSS Feed Warrior v2.1.0" or just "v2.1.0"
+  const match = /<entry[\s\S]*?<title[^>]*>([^<]*)<\/title>[\s\S]*?<\/entry>/i.exec(xmlText);
+  if (match?.[1]) {
+    const titleText = match[1].trim();
+    const versionMatch = /v?(\d+\.\d+(?:\.\d+)?)/i.exec(titleText);
+    if (versionMatch?.[1]) return versionMatch[1];
+  }
+  return null;
+}
 
 function setupAlarms() {
   chrome.storage.local.get('urls', data => {
     const urls = data.urls || [];
     urls.forEach(url => {
-      scheduleCheck(url);
+      if (!url.isPaused) {
+        scheduleCheck(url);
+      }
     });
   });
 }
 
 function scheduleCheck(url) {
+  if (url.isPaused) return;
   const alarmName = `check_url_${url.id}`;
   chrome.alarms.create(alarmName, {
     delayInMinutes: url.interval,
@@ -57,107 +129,112 @@ function stripHtmlTags(str) {
 
 function parseXML(xmlText) {
   const items = [];
-  let isAtom = xmlText.includes('<entry>');
-  let isRSS = xmlText.includes('<item>');
-  
-  if (!isAtom && !isRSS) {
-    console.error('Format tidak dikenali: bukan RSS atau Atom');
+
+  // ── Format detection ────────────────────────────────────────────
+  // Atom: has <feed ...> root OR <entry> elements
+  const isAtom = /<feed[\s>]/i.test(xmlText) || xmlText.includes('<entry>');
+
+  // RSS 1.0/RDF: has <rdf:RDF root (Steam Daily Deals, etc.)
+  // Items are tagged <item rdf:about="..."> — NOT naked <item>
+  const isRDF = /<rdf:RDF[\s>]/i.test(xmlText);
+
+  // RSS 2.0: has <rss or naked <item> (and is not RDF/Atom)
+  const isRSS2 = !isAtom && !isRDF && (/<rss[\s>]/i.test(xmlText) || xmlText.includes('<item>'));
+
+  if (!isAtom && !isRDF && !isRSS2) {
+    console.error('Unrecognized feed format: not Atom, RSS 2.0, or RSS 1.0/RDF');
     return items;
   }
 
-  // if format is Atom
+  // ── Atom ────────────────────────────────────────────────────────
   if (isAtom) {
-    const atomEntryRegex = /<entry>([\s\S]*?)<\/entry>/g;
-    let entryMatch;
+    const entryRegex = /<entry[^>]*>([\s\S]*?)<\/entry>/gi;
+    let match;
 
-    while ((entryMatch = atomEntryRegex.exec(xmlText)) !== null) {
-      const entryContent = entryMatch[1];
+    while ((match = entryRegex.exec(xmlText)) !== null) {
+      const c = match[1];
 
-      // Title
-      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(entryContent);
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(c);
       const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
 
-      // Link
-      const linkMatch = /<link[^>]*href="([^"]*)"[^>]*>/i.exec(entryContent);
-      const link = linkMatch ? linkMatch[1] : '';
+      // Atom link: prefer href attribute, fallback to text content
+      const linkAttr = /<link[^>]*\bhref="([^"]*)"[^>]*>/i.exec(c);
+      const linkText = !linkAttr ? /<link[^>]*>([\s\S]*?)<\/link>/i.exec(c) : null;
+      const link = linkAttr ? linkAttr[1] : (linkText ? linkText[1].trim() : '');
 
-      // PubDate
-      const dateMatch = /<(updated|published)[^>]*>([\s\S]*?)<\/(updated|published)>/i.exec(entryContent);
-      const pubDate = dateMatch ? dateMatch[2].trim() : '';
+      const dateMatch = /<(?:updated|published)[^>]*>([\s\S]*?)<\/(?:updated|published)>/i.exec(c);
+      const pubDate = dateMatch ? dateMatch[1].trim() : '';
 
-      // Author & Blockquote
-      let blockquote = '';
-      let author = '';
-      const summaryMatch = /<summary[\s\S]*?>([\s\S]*?)<\/summary>/i.exec(entryContent);
-      if (summaryMatch) {
-        // looking for <div class="blockquote">...</div>
-        const blockquoteMatch = /<div class="blockquote[^>]*>([\s\S]*?)<\/div>/i.exec(summaryMatch[1]);
-        if (blockquoteMatch) {
-          blockquote = stripHtmlTags(blockquoteMatch[1]);
+      const summaryMatch = /<summary[\s\S]*?>([\s\S]*?)<\/summary>/i.exec(c);
+      let blockquote = summaryMatch ? stripHtmlTags(summaryMatch[1]) : '';
 
-          // Take <strong>...</strong>
-          const strongMatch = /<strong[^>]*>(.*?)<\/strong>/i.exec(summaryMatch[1]);
-          if (strongMatch) {
-            author = stripHtmlTags(strongMatch[1]);
-          }
-        }
-      }
-
-      // If author is not found in blockquote, try to find it in author tag
-      if (!author) {
-        const authorMatch = /<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/i.exec(entryContent);
-        if (authorMatch) {
-          author = stripHtmlTags(authorMatch[1]);
-        }
-      }
+      const authorMatch = /<author[^>]*>[\s\S]*?<name[^>]*>([\s\S]*?)<\/name>[\s\S]*?<\/author>/i.exec(c);
+      const author = authorMatch ? stripHtmlTags(authorMatch[1]) : '';
 
       items.push({ title, link, pubDate, author, blockquote });
-
       if (items.length >= 3) break;
     }
   }
 
-  // If format is RSS
-  else if (isRSS) {
-    const rssItemRegex = /<item>([\s\S]*?)<\/item>/g;
-    let itemMatch;
+  // ── RSS 1.0 / RDF ───────────────────────────────────────────────
+  // Items use <item rdf:about="URL"> ... </item>
+  else if (isRDF) {
+    // Match <item ...> with any attributes (rdf:about etc.)
+    const itemRegex = /<item[\s][^>]*>([\s\S]*?)<\/item>/gi;
+    let match;
 
-    while ((itemMatch = rssItemRegex.exec(xmlText)) !== null) {
-      const itemContent = itemMatch[1];
+    while ((match = itemRegex.exec(xmlText)) !== null) {
+      const c = match[1];
 
-      // Title
-      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(itemContent);
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(c);
       const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
 
-      // Link
-      const linkMatch = /<link[^>]*>([\s\S]*?)<\/link>/i.exec(itemContent);
+      // RDF link is usually in <link> text content
+      const linkMatch = /<link[^>]*>([\s\S]*?)<\/link>/i.exec(c);
       const link = linkMatch ? linkMatch[1].trim() : '';
 
-      // PubDate - RSS using format RFC 822
-      const dateMatch = /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i.exec(itemContent);
+      const dateMatch = /<(?:dc:date|pubDate)[^>]*>([\s\S]*?)<\/(?:dc:date|pubDate)>/i.exec(c);
       const pubDate = dateMatch ? dateMatch[1].trim() : '';
 
-      // Description as blockquote
-      let blockquote = '';
-      const descMatch = /<description[^>]*>([\s\S]*?)<\/description>/i.exec(itemContent);
-      if (descMatch) {
-        blockquote = stripHtmlTags(descMatch[1]);
-      }
+      const descMatch = /<description[^>]*>([\s\S]*?)<\/description>/i.exec(c);
+      const blockquote = descMatch ? stripHtmlTags(descMatch[1]) : '';
 
-      // Author - RSS can use <dc:creator> or <author>
-      let author = '';
-      const dcCreatorMatch = /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i.exec(itemContent);
-      if (dcCreatorMatch) {
-        author = stripHtmlTags(dcCreatorMatch[1]);
-      } else {
-        const authorMatch = /<author[^>]*>([\s\S]*?)<\/author>/i.exec(itemContent);
-        if (authorMatch) {
-          author = stripHtmlTags(authorMatch[1]);
-        }
-      }
+      const dcCreator = /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i.exec(c);
+      const author = dcCreator ? stripHtmlTags(dcCreator[1]) : '';
 
       items.push({ title, link, pubDate, author, blockquote });
+      if (items.length >= 3) break;
+    }
+  }
 
+  // ── RSS 2.0 ─────────────────────────────────────────────────────
+  else if (isRSS2) {
+    // Match both naked <item> and <item ...attributes...>
+    const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
+    let match;
+
+    while ((match = itemRegex.exec(xmlText)) !== null) {
+      const c = match[1];
+
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(c);
+      const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
+
+      const linkMatch = /<link[^>]*>([\s\S]*?)<\/link>/i.exec(c);
+      const link = linkMatch ? linkMatch[1].trim() : '';
+
+      const dateMatch = /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i.exec(c);
+      const pubDate = dateMatch ? dateMatch[1].trim() : '';
+
+      const descMatch = /<description[^>]*>([\s\S]*?)<\/description>/i.exec(c);
+      const blockquote = descMatch ? stripHtmlTags(descMatch[1]) : '';
+
+      const dcCreatorMatch = /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i.exec(c);
+      const authorMatch    = /<author[^>]*>([\s\S]*?)<\/author>/i.exec(c);
+      const author = dcCreatorMatch
+        ? stripHtmlTags(dcCreatorMatch[1])
+        : (authorMatch ? stripHtmlTags(authorMatch[1]) : '');
+
+      items.push({ title, link, pubDate, author, blockquote });
       if (items.length >= 3) break;
     }
   }
@@ -166,32 +243,25 @@ function parseXML(xmlText) {
 }
 
 function checkUrl(urlId) {
-  chrome.storage.local.get('urls', data => {
-    const urls = data.urls || [];
-    const url = urls.find(u => u.id === urlId);
-    if (!url) return;
+  // Single storage read — no need for a double-read anti-pattern
+  chrome.storage.local.get('urls', freshData => {
+    const freshUrls = freshData.urls || [];
+    const freshUrl = freshUrls.find(u => u.id === urlId);
+    if (!freshUrl || freshUrl.isPaused) return;
 
-    // Prevent multiple simultaneous checks for same URL using atomic update
-    chrome.storage.local.get('urls', freshData => {
-      const freshUrls = freshData.urls || [];
-      const freshUrl = freshUrls.find(u => u.id === urlId);
-      if (!freshUrl) return;
-
-      // temporary disable checking because stuck in checking
-      // if (freshUrl.isChecking) {
-      //   console.log('Check already in progress for URL:', freshUrl.name);
-      //   return;
-      // }
-
-      // Mark as checking
       freshUrl.isChecking = true;
       chrome.storage.local.set({ urls: freshUrls }, () => {
-        fetch(freshUrl.url)
-          .then(response => response.text())
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+        fetch(freshUrl.url, { signal: controller.signal })
+          .then(response => {
+            clearTimeout(timeoutId);
+            return response.text();
+          })
           .then(xmlText => {
             const latestItems = parseXML(xmlText);
 
-            // Get fresh data to avoid race conditions
             chrome.storage.local.get('urls', newestData => {
               const newestUrls = newestData.urls || [];
               const newestUrl = newestUrls.find(u => u.id === urlId);
@@ -203,10 +273,6 @@ function checkUrl(urlId) {
                 const newTitle = latestItems[0].title;
                 const oldTitle = newestUrl.lastContent;
 
-                // Only trigger notification if:
-                // 1. We have a previous title to compare with
-                // 2. The new title is different from the old one
-                // 3. The new title is not empty
                 if (oldTitle && newTitle && oldTitle !== newTitle) {
                   hasNewContent = true;
                   console.log('New content detected for:', newestUrl.name);
@@ -219,7 +285,9 @@ function checkUrl(urlId) {
 
               newestUrl.latestItems = latestItems;
               newestUrl.lastChecked = new Date().toISOString();
-              newestUrl.isChecking = false; // Clear checking flag
+              newestUrl.isChecking = false;
+              newestUrl.hasNew = hasNewContent ? true : (newestUrl.hasNew || false);
+              newestUrl.isError = false;
 
               chrome.storage.local.set({ urls: newestUrls }, () => {
                 if (hasNewContent) {
@@ -229,20 +297,22 @@ function checkUrl(urlId) {
             });
           })
           .catch(error => {
-            console.error('Error checking', freshUrl.url, ':', error);
+            clearTimeout(timeoutId);
+            const isTimeout = error.name === 'AbortError';
+            console.error('Error checking', freshUrl.url, ':', isTimeout ? 'Timeout (30s)' : error);
 
-            // Clear checking flag on error
             chrome.storage.local.get('urls', errorData => {
               const errorUrls = errorData.urls || [];
               const errorUrl = errorUrls.find(u => u.id === urlId);
               if (errorUrl) {
                 errorUrl.isChecking = false;
+                errorUrl.isError = true;
+                errorUrl.lastError = isTimeout ? 'Timeout' : error.message;
                 chrome.storage.local.set({ urls: errorUrls });
               }
             });
           });
       });
-    });
   });
 }
 
@@ -258,5 +328,17 @@ function showNotification(url) {
     priority: 1
   });
 
+  updateBadgeCount();
+
   console.log('Notification shown for:', url.name, '- Title:', latestTitle);
+}
+
+function updateBadgeCount() {
+  chrome.storage.local.get('urls', data => {
+    const urls = data.urls || [];
+    const newCount = urls.filter(u => u.hasNew).length;
+    const badgeText = newCount > 0 ? String(newCount) : '';
+    chrome.action.setBadgeText({ text: badgeText });
+    chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
+  });
 }

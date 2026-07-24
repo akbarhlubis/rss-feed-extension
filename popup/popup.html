@@ -10,63 +10,130 @@
 </head>
 <body>
   <div class="container">
+
+    <!-- HEADER -->
     <div class="header-container">
-      <div class="header-logo">
-        <img src="/assets/icon128.png" width="48px" alt="RSS Feed Warrior Logo" class="logo">
+      <div class="header-brand">
+        <img src="/assets/icon128.png" width="36" height="36" alt="RSS Feed Warrior Logo">
+        <div class="header-text">
+          <h1 class="header-title">RSS Feed Warrior</h1>
+          <span class="version" aria-label="Extension version"></span>
+        </div>
       </div>
-      <div class="header-text">
-        <h1 class="header-title extension-name">RSS Feed Warrior</h1>
-        <span class="version"></span>
+      <div class="header-icons">
+        <a href="https://trakteer.id/akbarhlubis/tip"
+           class="icon-btn trakteer"
+           target="_blank"
+           rel="noopener noreferrer"
+           title="Donate"
+           aria-label="Donate via Trakteer">
+          <i class="bi bi-heart-fill" aria-hidden="true"></i>
+        </a>
+        <button id="check-update-btn" class="icon-btn" title="Check for Update" aria-label="Check for update">
+          <i class="bi bi-arrow-repeat" aria-hidden="true"></i>
+        </button>
       </div>
-        <div class="header-icons">
-          <a href="https://trakteer.id/akbarhlubis/tip" class="icon-btn trakteer" target="_blank" title="Donate">
-            <i class="bi bi-heart-fill"></i>
-          </a>
-          <button id="check-update-btn" class="icon-btn" title="Check for Update">
-            <i class="bi bi-arrow-repeat"></i>
+    </div>
+
+    <!-- UPDATE BANNER (hidden by default, shown by JS when new version detected) -->
+    <div id="update-banner" class="update-banner" hidden>
+      <div class="update-banner-content">
+        <i class="bi bi-download" aria-hidden="true"></i>
+        <span id="update-banner-msg">New version available!</span>
+      </div>
+      <div class="update-banner-actions">
+        <button id="update-download-btn" class="btn btn-sm btn-primary">
+          <i class="bi bi-cloud-download" aria-hidden="true"></i> Download
+        </button>
+        <button id="update-dismiss-btn" class="icon-btn" aria-label="Dismiss update notification">
+          <i class="bi bi-x" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+    <!-- FEEDS LIST (Primary — shown first) -->
+    <div class="urls-section" id="urls-section">
+      <div class="section-header">
+        <h2>Feeds</h2>
+        <div class="section-actions">
+          <button id="export-btn" class="icon-btn" title="Export Feeds" aria-label="Export feeds to JSON">
+            <i class="bi bi-download" aria-hidden="true"></i>
+          </button>
+          <button id="import-btn" class="icon-btn" title="Import Feeds" aria-label="Import feeds from JSON">
+            <i class="bi bi-upload" aria-hidden="true"></i>
+          </button>
+          <input type="file" id="import-file-input" accept=".json" hidden>
+          <button id="add-feed-toggle-btn" class="btn btn-sm btn-outline" aria-expanded="false" aria-controls="add-url-section">
+            <i class="bi bi-plus-lg" aria-hidden="true"></i> Add Feed
           </button>
         </div>
+      </div>
+
+      <!-- SEARCH & FILTER BAR -->
+      <div class="filter-bar">
+        <div class="search-wrapper">
+          <i class="bi bi-search search-icon" aria-hidden="true"></i>
+          <input
+            type="search"
+            id="search-input"
+            placeholder="Search feeds..."
+            aria-label="Search feeds"
+            autocomplete="off">
+        </div>
+        <select id="filter-select" aria-label="Filter feeds">
+          <option value="all">All</option>
+          <option value="new">New</option>
+          <option value="error">Error</option>
+          <option value="paused">Paused</option>
+        </select>
+      </div>
+
+      <!-- FEED LIST -->
+      <div
+        id="urls-list"
+        role="list"
+        aria-label="Monitored RSS feeds"
+        aria-live="polite">
+        <!-- Loading skeleton (replaced by JS after data loads) -->
+        <div class="skeleton-item"></div>
+        <div class="skeleton-item"></div>
+      </div>
     </div>
-    
-    <div class="add-url-section">
-      <h2>Add URL</h2>
-      <form id="add-url-form">
+
+    <!-- ADD FEED FORM (Secondary — collapsed by default) -->
+    <div class="add-url-section" id="add-url-section" hidden>
+      <div class="section-header">
+        <h2>Add Feed</h2>
+        <button id="close-add-form-btn" class="icon-btn" aria-label="Close add feed form">
+          <i class="bi bi-x-lg" aria-hidden="true"></i>
+        </button>
+      </div>
+      <form id="add-url-form" novalidate>
         <div class="input-group">
-          <input type="url" id="url-input" placeholder="Enter RSS or Atom URL" required>
-          <span class="input-hint">*https://example.com/link.atom or https://example.com/link.rss</span>
+          <label for="url-input">RSS / Atom URL <span class="required-star" aria-hidden="true">*</span></label>
+          <input type="url" id="url-input" placeholder="https://example.com/feed.atom" required autocomplete="off">
+          <span class="input-hint" id="url-hint">Must start with https:// or http://</span>
         </div>
         <div class="input-group">
-          <label for="name-input">Name:</label>
-          <input type="text" id="name-input" placeholder="Site name" required>
+          <label for="name-input">Name <span class="required-star" aria-hidden="true">*</span></label>
+          <input type="text" id="name-input" placeholder="Site name" required autocomplete="off" maxlength="50">
         </div>
         <div class="input-group">
-          <label for="interval-input">Check interval (minutes):</label>
-          <input type="number" id="interval-input" min="1" value="30" required>
+          <label for="interval-input">Check interval (minutes) <span class="required-star" aria-hidden="true">*</span></label>
+          <input type="number" id="interval-input" min="1" max="1440" value="30" required>
+          <span class="input-hint">Min: 1. Recommended: 30+ to preserve battery.</span>
         </div>
-        <div class="input-group">
-          <label for="selector-input">CSS Selector (optional):</label>
-          <input type="text" id="selector-input" placeholder=".content, #main, etc">
-        </div>
-        <button type="submit" class="btn">Add URL</button>
+        <button type="submit" class="btn btn-primary btn-full">
+          <i class="bi bi-plus-lg" aria-hidden="true"></i> Add Feed
+        </button>
       </form>
       <div class="footer">
-        <p>Designed and Developed With ❤ By Akbarhlubis</p>
+        <p>Made with <i class="bi bi-heart-fill" aria-hidden="true"></i> by Akbarhlubis</p>
       </div>
     </div>
-    
-    <div class="urls-section">
-      <div class="header-url">
-        <h2>URLs</h2>
-        <div>
-          <button id="collapse-urls" class="btn">Close</button>
-        </div>
-      </div>
-      <div id="urls-list">
-        <!-- URLs will be listed here -->
-        <div class="no-urls">No URLs added yet.</div>
-      </div>
-    </div>
+
   </div>
+
   <script type="text/javascript" src="/assets/toastify.js"></script>
   <script src="popup.js"></script>
 </body>
