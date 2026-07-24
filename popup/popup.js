@@ -191,8 +191,12 @@ document.addEventListener('DOMContentLoaded', function () {
 
     urls.forEach(item => {
       const urlItem = document.createElement('div');
-      urlItem.className = 'url-item' + (item.isPaused ? ' is-paused' : '');
+      const classes = ['url-item'];
+      if (item.isPaused)  classes.push('is-paused');
+      if (item.isChecking) classes.push('is-checking');
+      urlItem.className = classes.join(' ');
       urlItem.setAttribute('role', 'listitem');
+      if (item.isChecking) urlItem.setAttribute('aria-busy', 'true');
       urlItem.dataset.id = item.id;
 
       // ── Header row ──
