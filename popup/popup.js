@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', function () {
   // ── Init ─────────────────────────────────────────────────────────
   displayVersion();
   loadUrls();
+  initDragSort();
 
   // ── Add Feed Toggle ──────────────────────────────────────────────
   addFeedToggleBtn.addEventListener('click', function () {
@@ -203,6 +204,14 @@ document.addEventListener('DOMContentLoaded', function () {
       const header = document.createElement('div');
       header.className = 'url-item-header';
 
+      // Drag handle — hidden until hover, disabled when search/filter active
+      const dragHandle = document.createElement('span');
+      dragHandle.className = 'drag-handle';
+      dragHandle.setAttribute('aria-label', 'Drag to reorder');
+      dragHandle.setAttribute('title', 'Drag to reorder');
+      dragHandle.innerHTML = '<i class="bi bi-grip-vertical" aria-hidden="true"></i>';
+      dragHandle.dataset.dragHandle = 'true';
+
       const statusDot = document.createElement('span');
       statusDot.className = 'status-dot ' + getStatusClass(item);
       statusDot.setAttribute('aria-label', getStatusTitle(item));
@@ -224,6 +233,7 @@ document.addEventListener('DOMContentLoaded', function () {
       expandBtn.setAttribute('aria-expanded', 'false');
       expandBtn.innerHTML = '<i class="bi bi-chevron-down" aria-hidden="true"></i>';
 
+      header.appendChild(dragHandle);
       header.appendChild(statusDot);
       header.appendChild(nameEl);
       header.appendChild(metaEl);
@@ -317,9 +327,22 @@ document.addEventListener('DOMContentLoaded', function () {
       deleteBtn.setAttribute('aria-label', `Delete ${item.name}`);
       deleteBtn.innerHTML = 'Delete <i class="bi bi-trash" aria-hidden="true"></i>';
 
+      // ↑/↓ keyboard reorder buttons (accessibility fallback)
+      const moveUpBtn = document.createElement('button');
+      moveUpBtn.className = 'move-btn move-up-btn';
+      moveUpBtn.setAttribute('aria-label', `Move ${item.name} up`);
+      moveUpBtn.innerHTML = '<i class="bi bi-arrow-up" aria-hidden="true"></i>';
+
+      const moveDownBtn = document.createElement('button');
+      moveDownBtn.className = 'move-btn move-down-btn';
+      moveDownBtn.setAttribute('aria-label', `Move ${item.name} down`);
+      moveDownBtn.innerHTML = '<i class="bi bi-arrow-down" aria-hidden="true"></i>';
+
       btnGroup.appendChild(checkBtn);
       btnGroup.appendChild(pauseBtn);
       btnGroup.appendChild(deleteBtn);
+      btnGroup.appendChild(moveUpBtn);
+      btnGroup.appendChild(moveDownBtn);
 
       detail.appendChild(urlDetail);
       detail.appendChild(intervalDetail);
@@ -365,6 +388,18 @@ document.addEventListener('DOMContentLoaded', function () {
       pauseBtn.addEventListener('click', () => {
         togglePause(item.id, !isPaused);
       });
+
+      // ↑/↓ move buttons: disabled at edges, hidden when search/filter active
+      const currentIdx = allUrls.findIndex(u => u.id === item.id);
+      if (currentIdx <= 0) moveUpBtn.disabled = true;
+      if (currentIdx >= allUrls.length - 1) moveDownBtn.disabled = true;
+      if (searchQuery || filterValue !== 'all') {
+        moveUpBtn.hidden = true;
+        moveDownBtn.hidden = true;
+      }
+
+      moveUpBtn.addEventListener('click', () => moveFeed(item.id, -1));
+      moveDownBtn.addEventListener('click', () => moveFeed(item.id, 1));
 
       deleteBtn.addEventListener('click', () => {
         if (deleteBtn.dataset.confirming === 'true') {
@@ -642,5 +677,129 @@ document.addEventListener('DOMContentLoaded', function () {
     };
 
     reader.readAsText(file);
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // DRAG & DROP REORDER (Pointer Events)
+  // ════════════════════════════════════════════════════════════════
+
+  function moveFeed(id, direction) {
+    const idx = allUrls.findIndex(u => u.id === id);
+    if (idx === -1) return;
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= allUrls.length) return;
+
+    // Swap
+    const temp = allUrls[idx];
+    allUrls[idx] = allUrls[newIdx];
+    allUrls[newIdx] = temp;
+
+    chrome.storage.local.set({ urls: allUrls }, () => {
+      renderUrls();
+    });
+  }
+
+  function initDragSort() {
+    let draggedElement = null;
+    let placeholder = null;
+    let pointerId = null;
+
+    urlsList.addEventListener('pointerdown', (e) => {
+      const handle = e.target.closest('.drag-handle');
+      if (!handle) return;
+      
+      // Disable drag if search or filter is active
+      if (searchQuery || filterValue !== 'all') {
+        showToast('Clear search and filter to reorder feeds.');
+        return;
+      }
+
+      e.preventDefault(); // Prevent text selection
+      pointerId = e.pointerId;
+      handle.setPointerCapture(pointerId);
+
+      const urlItem = handle.closest('.url-item');
+      if (!urlItem) return;
+
+      draggedElement = urlItem;
+      urlItem.classList.add('is-dragging');
+
+      // Create placeholder
+      placeholder = document.createElement('div');
+      placeholder.className = 'drag-placeholder';
+      placeholder.style.height = urlItem.offsetHeight + 'px';
+      
+      urlsList.insertBefore(placeholder, urlItem);
+    });
+
+    urlsList.addEventListener('pointermove', (e) => {
+      if (!draggedElement || e.pointerId !== pointerId) return;
+      
+      // Auto-scroll
+      const rect = document.documentElement.getBoundingClientRect();
+      const edge = 60;
+      if (e.clientY < edge) {
+        window.scrollBy(0, -10);
+      } else if (window.innerHeight - e.clientY < edge) {
+        window.scrollBy(0, 10);
+      }
+
+      const afterElement = getDragAfterElement(urlsList, e.clientY);
+      if (afterElement == null) {
+        urlsList.appendChild(draggedElement);
+      } else {
+        urlsList.insertBefore(draggedElement, afterElement);
+      }
+    });
+
+    const endDrag = (e) => {
+      if (!draggedElement || e.pointerId !== pointerId) return;
+      
+      const handle = e.target.closest('.drag-handle');
+      if (handle) handle.releasePointerCapture(pointerId);
+
+      draggedElement.classList.remove('is-dragging');
+      if (placeholder && placeholder.parentNode) {
+         placeholder.parentNode.removeChild(placeholder);
+      }
+      
+      // Re-order allUrls array based on DOM positions
+      const newOrderIds = Array.from(urlsList.querySelectorAll('.url-item')).map(item => parseInt(item.dataset.id, 10));
+      
+      const newUrls = [];
+      newOrderIds.forEach(id => {
+        const feed = allUrls.find(u => u.id === id);
+        if (feed) newUrls.push(feed);
+      });
+
+      // Update allUrls and storage
+      if (newUrls.length === allUrls.length) {
+        allUrls = newUrls;
+        chrome.storage.local.set({ urls: allUrls });
+      }
+
+      draggedElement = null;
+      placeholder = null;
+      pointerId = null;
+      
+      renderUrls();
+    };
+
+    urlsList.addEventListener('pointerup', endDrag);
+    urlsList.addEventListener('pointercancel', endDrag);
+  }
+
+  function getDragAfterElement(container, y) {
+    const draggableElements = [...container.querySelectorAll('.url-item:not(.is-dragging)')];
+    
+    return draggableElements.reduce((closest, child) => {
+      const box = child.getBoundingClientRect();
+      const offset = y - box.top - box.height / 2;
+      if (offset < 0 && offset > closest.offset) {
+        return { offset: offset, element: child };
+      } else {
+        return closest;
+      }
+    }, { offset: Number.NEGATIVE_INFINITY }).element;
   }
 });
