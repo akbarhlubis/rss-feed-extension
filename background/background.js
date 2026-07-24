@@ -95,109 +95,112 @@ function stripHtmlTags(str) {
 
 function parseXML(xmlText) {
   const items = [];
-  // Detect Atom: either <entry> elements or a <feed> root element (namespace variants)
-  const isAtom = xmlText.includes('<entry>') || /<feed[\s>]/i.test(xmlText);
-  // Detect RSS: <item> elements inside <rss> or <channel>
-  const isRSS = xmlText.includes('<item>') && !isAtom;
 
-  if (!isAtom && !isRSS) {
-    console.error('Unrecognized feed format: not RSS or Atom');
+  // ── Format detection ────────────────────────────────────────────
+  // Atom: has <feed ...> root OR <entry> elements
+  const isAtom = /<feed[\s>]/i.test(xmlText) || xmlText.includes('<entry>');
+
+  // RSS 1.0/RDF: has <rdf:RDF root (Steam Daily Deals, etc.)
+  // Items are tagged <item rdf:about="..."> — NOT naked <item>
+  const isRDF = /<rdf:RDF[\s>]/i.test(xmlText);
+
+  // RSS 2.0: has <rss or naked <item> (and is not RDF/Atom)
+  const isRSS2 = !isAtom && !isRDF && (/<rss[\s>]/i.test(xmlText) || xmlText.includes('<item>'));
+
+  if (!isAtom && !isRDF && !isRSS2) {
+    console.error('Unrecognized feed format: not Atom, RSS 2.0, or RSS 1.0/RDF');
     return items;
   }
 
-  // if format is Atom
+  // ── Atom ────────────────────────────────────────────────────────
   if (isAtom) {
-    const atomEntryRegex = /<entry>([\s\S]*?)<\/entry>/g;
-    let entryMatch;
+    const entryRegex = /<entry[^>]*>([\s\S]*?)<\/entry>/gi;
+    let match;
 
-    while ((entryMatch = atomEntryRegex.exec(xmlText)) !== null) {
-      const entryContent = entryMatch[1];
+    while ((match = entryRegex.exec(xmlText)) !== null) {
+      const c = match[1];
 
-      // Title
-      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(entryContent);
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(c);
       const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
 
-      // Link
-      const linkMatch = /<link[^>]*href="([^"]*)"[^>]*>/i.exec(entryContent);
-      const link = linkMatch ? linkMatch[1] : '';
+      // Atom link: prefer href attribute, fallback to text content
+      const linkAttr = /<link[^>]*\bhref="([^"]*)"[^>]*>/i.exec(c);
+      const linkText = !linkAttr ? /<link[^>]*>([\s\S]*?)<\/link>/i.exec(c) : null;
+      const link = linkAttr ? linkAttr[1] : (linkText ? linkText[1].trim() : '');
 
-      // PubDate
-      const dateMatch = /<(updated|published)[^>]*>([\s\S]*?)<\/(updated|published)>/i.exec(entryContent);
-      const pubDate = dateMatch ? dateMatch[2].trim() : '';
+      const dateMatch = /<(?:updated|published)[^>]*>([\s\S]*?)<\/(?:updated|published)>/i.exec(c);
+      const pubDate = dateMatch ? dateMatch[1].trim() : '';
 
-      // Author & Blockquote
-      let blockquote = '';
-      let author = '';
-      const summaryMatch = /<summary[\s\S]*?>([\s\S]*?)<\/summary>/i.exec(entryContent);
-      if (summaryMatch) {
-        // looking for <div class="blockquote">...</div>
-        const blockquoteMatch = /<div class="blockquote[^>]*>([\s\S]*?)<\/div>/i.exec(summaryMatch[1]);
-        if (blockquoteMatch) {
-          blockquote = stripHtmlTags(blockquoteMatch[1]);
+      const summaryMatch = /<summary[\s\S]*?>([\s\S]*?)<\/summary>/i.exec(c);
+      let blockquote = summaryMatch ? stripHtmlTags(summaryMatch[1]) : '';
 
-          // Take <strong>...</strong>
-          const strongMatch = /<strong[^>]*>(.*?)<\/strong>/i.exec(summaryMatch[1]);
-          if (strongMatch) {
-            author = stripHtmlTags(strongMatch[1]);
-          }
-        }
-      }
-
-      // If author is not found in blockquote, try to find it in author tag
-      if (!author) {
-        const authorMatch = /<author>[\s\S]*?<name>([\s\S]*?)<\/name>[\s\S]*?<\/author>/i.exec(entryContent);
-        if (authorMatch) {
-          author = stripHtmlTags(authorMatch[1]);
-        }
-      }
+      const authorMatch = /<author[^>]*>[\s\S]*?<name[^>]*>([\s\S]*?)<\/name>[\s\S]*?<\/author>/i.exec(c);
+      const author = authorMatch ? stripHtmlTags(authorMatch[1]) : '';
 
       items.push({ title, link, pubDate, author, blockquote });
-
       if (items.length >= 3) break;
     }
   }
 
-  // If format is RSS
-  else if (isRSS) {
-    const rssItemRegex = /<item>([\s\S]*?)<\/item>/g;
-    let itemMatch;
+  // ── RSS 1.0 / RDF ───────────────────────────────────────────────
+  // Items use <item rdf:about="URL"> ... </item>
+  else if (isRDF) {
+    // Match <item ...> with any attributes (rdf:about etc.)
+    const itemRegex = /<item[\s][^>]*>([\s\S]*?)<\/item>/gi;
+    let match;
 
-    while ((itemMatch = rssItemRegex.exec(xmlText)) !== null) {
-      const itemContent = itemMatch[1];
+    while ((match = itemRegex.exec(xmlText)) !== null) {
+      const c = match[1];
 
-      // Title
-      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(itemContent);
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(c);
       const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
 
-      // Link
-      const linkMatch = /<link[^>]*>([\s\S]*?)<\/link>/i.exec(itemContent);
+      // RDF link is usually in <link> text content
+      const linkMatch = /<link[^>]*>([\s\S]*?)<\/link>/i.exec(c);
       const link = linkMatch ? linkMatch[1].trim() : '';
 
-      // PubDate - RSS using format RFC 822
-      const dateMatch = /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i.exec(itemContent);
+      const dateMatch = /<(?:dc:date|pubDate)[^>]*>([\s\S]*?)<\/(?:dc:date|pubDate)>/i.exec(c);
       const pubDate = dateMatch ? dateMatch[1].trim() : '';
 
-      // Description as blockquote
-      let blockquote = '';
-      const descMatch = /<description[^>]*>([\s\S]*?)<\/description>/i.exec(itemContent);
-      if (descMatch) {
-        blockquote = stripHtmlTags(descMatch[1]);
-      }
+      const descMatch = /<description[^>]*>([\s\S]*?)<\/description>/i.exec(c);
+      const blockquote = descMatch ? stripHtmlTags(descMatch[1]) : '';
 
-      // Author - RSS can use <dc:creator> or <author>
-      let author = '';
-      const dcCreatorMatch = /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i.exec(itemContent);
-      if (dcCreatorMatch) {
-        author = stripHtmlTags(dcCreatorMatch[1]);
-      } else {
-        const authorMatch = /<author[^>]*>([\s\S]*?)<\/author>/i.exec(itemContent);
-        if (authorMatch) {
-          author = stripHtmlTags(authorMatch[1]);
-        }
-      }
+      const dcCreator = /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i.exec(c);
+      const author = dcCreator ? stripHtmlTags(dcCreator[1]) : '';
 
       items.push({ title, link, pubDate, author, blockquote });
+      if (items.length >= 3) break;
+    }
+  }
 
+  // ── RSS 2.0 ─────────────────────────────────────────────────────
+  else if (isRSS2) {
+    // Match both naked <item> and <item ...attributes...>
+    const itemRegex = /<item[^>]*>([\s\S]*?)<\/item>/gi;
+    let match;
+
+    while ((match = itemRegex.exec(xmlText)) !== null) {
+      const c = match[1];
+
+      const titleMatch = /<title[^>]*>([\s\S]*?)<\/title>/i.exec(c);
+      const title = titleMatch ? stripHtmlTags(titleMatch[1]) : '';
+
+      const linkMatch = /<link[^>]*>([\s\S]*?)<\/link>/i.exec(c);
+      const link = linkMatch ? linkMatch[1].trim() : '';
+
+      const dateMatch = /<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i.exec(c);
+      const pubDate = dateMatch ? dateMatch[1].trim() : '';
+
+      const descMatch = /<description[^>]*>([\s\S]*?)<\/description>/i.exec(c);
+      const blockquote = descMatch ? stripHtmlTags(descMatch[1]) : '';
+
+      const dcCreatorMatch = /<dc:creator[^>]*>([\s\S]*?)<\/dc:creator>/i.exec(c);
+      const authorMatch    = /<author[^>]*>([\s\S]*?)<\/author>/i.exec(c);
+      const author = dcCreatorMatch
+        ? stripHtmlTags(dcCreatorMatch[1])
+        : (authorMatch ? stripHtmlTags(authorMatch[1]) : '');
+
+      items.push({ title, link, pubDate, author, blockquote });
       if (items.length >= 3) break;
     }
   }
