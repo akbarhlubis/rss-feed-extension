@@ -363,8 +363,22 @@ document.addEventListener('DOMContentLoaded', function () {
       });
 
       deleteBtn.addEventListener('click', () => {
-        if (confirm(`Delete feed "${item.name}"?`)) {
+        if (deleteBtn.dataset.confirming === 'true') {
+          // Second click within the window — execute delete
           deleteUrl(item.id);
+        } else {
+          // First click — enter confirmation mode
+          deleteBtn.dataset.confirming = 'true';
+          deleteBtn.textContent = 'Confirm?';
+          deleteBtn.style.background = '#922b21';
+          const resetTimer = setTimeout(() => {
+            if (deleteBtn.isConnected) {
+              deleteBtn.dataset.confirming = 'false';
+              deleteBtn.innerHTML = 'Delete <i class="bi bi-trash" aria-hidden="true"></i>';
+              deleteBtn.style.background = '';
+            }
+          }, 3000);
+          deleteBtn._resetTimer = resetTimer;
         }
       });
     });
@@ -374,15 +388,6 @@ document.addEventListener('DOMContentLoaded', function () {
   // HELPERS
   // ════════════════════════════════════════════════════════════════
 
-  function escapeHtml(text) {
-    if (!text) return '';
-    return String(text)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;');
-  }
 
   function safeUrl(url) {
     try {
@@ -449,9 +454,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const currentVersion = chrome.runtime.getManifest().version;
 
         if (latestVersion && compareVersions(latestVersion, currentVersion) > 0) {
-          if (confirm(`Version ${latestVersion} is available! (yours: ${currentVersion}). Open download page?`)) {
-            chrome.tabs.create({ url: 'https://github.com/akbarhlubis/rss-feed-extension/releases/latest' });
-          }
+          showUpdateBanner(latestVersion);
         } else {
           showToast('You are using the latest version.');
         }
@@ -463,6 +466,42 @@ document.addEventListener('DOMContentLoaded', function () {
         checkUpdateBtn.innerHTML = '<i class="bi bi-arrow-repeat" aria-hidden="true"></i>';
         checkUpdateBtn.disabled = false;
       });
+  }
+
+  function showUpdateBanner(newVersion) {
+    const banner = document.getElementById('update-banner');
+    if (!banner) return;
+
+    const msg = banner.querySelector('#update-banner-msg');
+    const downloadBtn = banner.querySelector('#update-download-btn');
+    const dismissBtn = banner.querySelector('#update-dismiss-btn');
+
+    if (msg) msg.textContent = `v${newVersion} is available!`;
+    banner.hidden = false;
+
+    // Auto-download ZIP via chrome.downloads
+    if (downloadBtn) {
+      downloadBtn.onclick = () => {
+        const zipUrl = `https://github.com/akbarhlubis/rss-feed-extension/archive/refs/tags/v${newVersion}.zip`;
+        chrome.downloads.download({
+          url: zipUrl,
+          filename: `rss-feed-warrior-v${newVersion}.zip`,
+          saveAs: false
+        }, (downloadId) => {
+          if (chrome.runtime.lastError) {
+            showToast('Download failed. Opening GitHub instead...');
+            chrome.tabs.create({ url: 'https://github.com/akbarhlubis/rss-feed-extension/releases/latest' });
+          } else {
+            showToast(`Downloading v${newVersion}... Check your downloads folder.`);
+            banner.hidden = true;
+          }
+        });
+      };
+    }
+
+    if (dismissBtn) {
+      dismissBtn.onclick = () => { banner.hidden = true; };
+    }
   }
 
   function parseGithubReleaseFeed(xmlText) {

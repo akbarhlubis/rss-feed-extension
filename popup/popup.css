@@ -266,7 +266,7 @@ h2 { font-size: var(--text-lg); color: var(--color-primary-darker); }
 
 /* ── URL List ───────────────────────────────────────────────── */
 #urls-list {
-  max-height: 380px;
+  max-height: 420px;
   overflow-y: auto;
   overflow-x: hidden;
   scrollbar-width: thin;
@@ -274,6 +274,8 @@ h2 { font-size: var(--text-lg); color: var(--color-primary-darker); }
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
+  padding-bottom: var(--sp-2);  /* prevent last card from clipping */
+  scroll-padding-bottom: var(--sp-2);
 }
 
 #urls-list::-webkit-scrollbar {
@@ -297,6 +299,60 @@ h2 { font-size: var(--text-lg); color: var(--color-primary-darker); }
 }
 
 .no-urls i { font-size: 28px; color: var(--color-border-medium); }
+
+/* ── Skeleton Loading ───────────────────────────────────────── */
+.skeleton-item {
+  height: 44px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(
+    90deg,
+    var(--color-border) 25%,
+    var(--color-surface-raised) 50%,
+    var(--color-border) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes skeleton-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ── Update Banner ──────────────────────────────────────────── */
+.update-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-2);
+  background: #fef3cd;
+  border: 1px solid #f0c040;
+  border-radius: var(--radius-md);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--text-sm);
+}
+
+.update-banner[hidden] { display: none; }
+
+.update-banner-content {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: #7d5a00;
+  font-weight: 600;
+}
+
+.update-banner-content i {
+  font-size: 16px;
+  color: #c07800;
+}
+
+.update-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
 
 /* ── URL Item (Feed Card) ───────────────────────────────────── */
 .url-item {

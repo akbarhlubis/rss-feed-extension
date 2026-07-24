@@ -95,11 +95,13 @@ function stripHtmlTags(str) {
 
 function parseXML(xmlText) {
   const items = [];
-  let isAtom = xmlText.includes('<entry>');
-  let isRSS = xmlText.includes('<item>');
-  
+  // Detect Atom: either <entry> elements or a <feed> root element (namespace variants)
+  const isAtom = xmlText.includes('<entry>') || /<feed[\s>]/i.test(xmlText);
+  // Detect RSS: <item> elements inside <rss> or <channel>
+  const isRSS = xmlText.includes('<item>') && !isAtom;
+
   if (!isAtom && !isRSS) {
-    console.error('Format tidak dikenali: bukan RSS atau Atom');
+    console.error('Unrecognized feed format: not RSS or Atom');
     return items;
   }
 
@@ -204,15 +206,11 @@ function parseXML(xmlText) {
 }
 
 function checkUrl(urlId) {
-  chrome.storage.local.get('urls', data => {
-    const urls = data.urls || [];
-    const url = urls.find(u => u.id === urlId);
-    if (!url) return;
-
-    chrome.storage.local.get('urls', freshData => {
-      const freshUrls = freshData.urls || [];
-      const freshUrl = freshUrls.find(u => u.id === urlId);
-      if (!freshUrl || freshUrl.isPaused) return;
+  // Single storage read — no need for a double-read anti-pattern
+  chrome.storage.local.get('urls', freshData => {
+    const freshUrls = freshData.urls || [];
+    const freshUrl = freshUrls.find(u => u.id === urlId);
+    if (!freshUrl || freshUrl.isPaused) return;
 
       freshUrl.isChecking = true;
       chrome.storage.local.set({ urls: freshUrls }, () => {
@@ -278,7 +276,6 @@ function checkUrl(urlId) {
             });
           });
       });
-    });
   });
 }
 

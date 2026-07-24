@@ -19,7 +19,8 @@
     "notifications",
     "alarms",
     "scripting",
-    "tabs"
+    "tabs",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"

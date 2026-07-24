@@ -35,6 +35,22 @@
       </div>
     </div>
 
+    <!-- UPDATE BANNER (hidden by default, shown by JS when new version detected) -->
+    <div id="update-banner" class="update-banner" hidden>
+      <div class="update-banner-content">
+        <i class="bi bi-download" aria-hidden="true"></i>
+        <span id="update-banner-msg">New version available!</span>
+      </div>
+      <div class="update-banner-actions">
+        <button id="update-download-btn" class="btn btn-sm btn-primary">
+          <i class="bi bi-cloud-download" aria-hidden="true"></i> Download
+        </button>
+        <button id="update-dismiss-btn" class="icon-btn" aria-label="Dismiss update notification">
+          <i class="bi bi-x" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
     <!-- FEEDS LIST (Primary — shown first) -->
     <div class="urls-section" id="urls-section">
       <div class="section-header">
@@ -78,7 +94,9 @@
         role="list"
         aria-label="Monitored RSS feeds"
         aria-live="polite">
-        <div class="no-urls">No feeds added yet.</div>
+        <!-- Loading skeleton (replaced by JS after data loads) -->
+        <div class="skeleton-item"></div>
+        <div class="skeleton-item"></div>
       </div>
     </div>
 
