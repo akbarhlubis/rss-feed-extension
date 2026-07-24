@@ -460,18 +460,27 @@ document.addEventListener('DOMContentLoaded', function () {
   function parseGithubReleaseFeed(xmlText) {
     const match = /<entry>[\s\S]*?<title>([^<]*)<\/title>[\s\S]*?<\/entry>/i.exec(xmlText);
     if (match?.[1]) {
-      const v = match[1].trim();
-      return v.startsWith('v') ? v.substring(1) : v;
+      const titleText = match[1].trim();
+      // Match semantic version pattern like v2.0.0 or 2.0.0 from title "RSS Feed Warrior v2.0.0"
+      const versionMatch = /v?(\d+\.\d+(?:\.\d+)?)/i.exec(titleText);
+      if (versionMatch?.[1]) {
+        return versionMatch[1];
+      }
     }
     return null;
   }
 
   function compareVersions(v1, v2) {
-    const a = v1.split('.').map(Number);
-    const b = v2.split('.').map(Number);
+    if (!v1 || !v2) return 0;
+    const cleanV1 = String(v1).replace(/[^0-9.]/g, '');
+    const cleanV2 = String(v2).replace(/[^0-9.]/g, '');
+    const a = cleanV1.split('.').map(Number);
+    const b = cleanV2.split('.').map(Number);
     for (let i = 0; i < Math.max(a.length, b.length); i++) {
-      const diff = (a[i] || 0) - (b[i] || 0);
-      if (diff !== 0) return diff;
+      const p1 = isNaN(a[i]) ? 0 : a[i];
+      const p2 = isNaN(b[i]) ? 0 : b[i];
+      if (p1 > p2) return 1;
+      if (p1 < p2) return -1;
     }
     return 0;
   }
