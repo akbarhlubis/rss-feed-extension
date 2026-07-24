@@ -1,9 +1,11 @@
 chrome.runtime.onInstalled.addListener(() => {
   setupAlarms();
+  updateBadgeCount();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   setupAlarms();
+  updateBadgeCount();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -13,6 +15,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     cancelCheck(message.id);
   } else if (message.action === 'manualCheck') {
     checkUrl(message.id);
+    return true; // Keep service worker alive a bit longer for async fetch
   } else if (message.action === 'pauseCheck') {
     cancelCheck(message.id);
   } else if (message.action === 'resumeCheck') {
@@ -242,78 +245,83 @@ function parseXML(xmlText) {
   return items;
 }
 
-function checkUrl(urlId) {
-  // Single storage read — no need for a double-read anti-pattern
-  chrome.storage.local.get('urls', freshData => {
+async function checkUrl(urlId) {
+  try {
+    const freshData = await chrome.storage.local.get('urls');
     const freshUrls = freshData.urls || [];
     const freshUrl = freshUrls.find(u => u.id === urlId);
     if (!freshUrl || freshUrl.isPaused) return;
 
-      freshUrl.isChecking = true;
-      chrome.storage.local.set({ urls: freshUrls }, () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+    freshUrl.isChecking = true;
+    // Save checking state, but don't wait for it to finish before fetching
+    chrome.storage.local.set({ urls: freshUrls });
 
-        fetch(freshUrl.url, { signal: controller.signal })
-          .then(response => {
-            clearTimeout(timeoutId);
-            return response.text();
-          })
-          .then(xmlText => {
-            const latestItems = parseXML(xmlText);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-            chrome.storage.local.get('urls', newestData => {
-              const newestUrls = newestData.urls || [];
-              const newestUrl = newestUrls.find(u => u.id === urlId);
-              if (!newestUrl) return;
+    const response = await fetch(freshUrl.url, {
+      signal: controller.signal,
+      cache: 'no-store'
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP Error ${response.status}: ${response.statusText}`);
+    }
+    
+    const xmlText = await response.text();
+    const latestItems = parseXML(xmlText);
 
-              let hasNewContent = false;
+    const newestData = await chrome.storage.local.get('urls');
+    const newestUrls = newestData.urls || [];
+    const newestUrl = newestUrls.find(u => u.id === urlId);
+    if (!newestUrl) return;
 
-              if (latestItems.length > 0) {
-                const newTitle = latestItems[0].title;
-                const oldTitle = newestUrl.lastContent;
+    let hasNewContent = false;
+    if (latestItems.length > 0) {
+      const newTitle = latestItems[0].title;
+      const oldTitle = newestUrl.lastContent;
 
-                if (oldTitle && newTitle && oldTitle !== newTitle) {
-                  hasNewContent = true;
-                  console.log('New content detected for:', newestUrl.name);
-                  console.log('Old:', oldTitle);
-                  console.log('New:', newTitle);
-                }
+      if (oldTitle && newTitle && oldTitle !== newTitle) {
+        hasNewContent = true;
+        console.log('New content detected for:', newestUrl.name);
+        console.log('Old:', oldTitle);
+        console.log('New:', newTitle);
+      }
+      newestUrl.lastContent = newTitle;
+    }
 
-                newestUrl.lastContent = newTitle;
-              }
+    newestUrl.latestItems = latestItems;
+    newestUrl.lastChecked = new Date().toISOString();
+    newestUrl.isChecking = false;
+    newestUrl.hasNew = hasNewContent ? true : (newestUrl.hasNew || false);
+    newestUrl.isError = false;
 
-              newestUrl.latestItems = latestItems;
-              newestUrl.lastChecked = new Date().toISOString();
-              newestUrl.isChecking = false;
-              newestUrl.hasNew = hasNewContent ? true : (newestUrl.hasNew || false);
-              newestUrl.isError = false;
+    await chrome.storage.local.set({ urls: newestUrls });
 
-              chrome.storage.local.set({ urls: newestUrls }, () => {
-                if (hasNewContent) {
-                  showNotification(newestUrl);
-                }
-              });
-            });
-          })
-          .catch(error => {
-            clearTimeout(timeoutId);
-            const isTimeout = error.name === 'AbortError';
-            console.error('Error checking', freshUrl.url, ':', isTimeout ? 'Timeout (30s)' : error);
+    if (hasNewContent) {
+      showNotification(newestUrl);
+    }
 
-            chrome.storage.local.get('urls', errorData => {
-              const errorUrls = errorData.urls || [];
-              const errorUrl = errorUrls.find(u => u.id === urlId);
-              if (errorUrl) {
-                errorUrl.isChecking = false;
-                errorUrl.isError = true;
-                errorUrl.lastError = isTimeout ? 'Timeout' : error.message;
-                chrome.storage.local.set({ urls: errorUrls });
-              }
-            });
-          });
-      });
-  });
+  } catch (error) {
+    const isTimeout = error.name === 'AbortError';
+    console.error('Error checking feed:', isTimeout ? 'Timeout (30s)' : error);
+
+    try {
+      const errorData = await chrome.storage.local.get('urls');
+      const errorUrls = errorData.urls || [];
+      const errorUrl = errorUrls.find(u => u.id === urlId);
+      if (errorUrl) {
+        errorUrl.isChecking = false;
+        errorUrl.isError = true;
+        errorUrl.lastError = isTimeout ? 'Timeout' : error.message;
+        await chrome.storage.local.set({ urls: errorUrls });
+      }
+    } catch (e) {
+      console.error('Failed to update error state:', e);
+    }
+  }
 }
 
 function showNotification(url) {
@@ -342,3 +350,10 @@ function updateBadgeCount() {
     chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
   });
 }
+
+// Automatically keep the badge in sync with storage changes
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes.urls) {
+    updateBadgeCount();
+  }
+});
