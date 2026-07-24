@@ -513,17 +513,19 @@ document.addEventListener('DOMContentLoaded', function () {
     }
   }
 
-  function parseGithubReleaseFeed(xmlText) {
-    const match = /<entry>[\s\S]*?<title>([^<]*)<\/title>[\s\S]*?<\/entry>/i.exec(xmlText);
-    if (match?.[1]) {
-      const titleText = match[1].trim();
-      // Match semantic version pattern like v2.0.0 or 2.0.0 from title "RSS Feed Warrior v2.0.0"
-      const versionMatch = /v?(\d+\.\d+(?:\.\d+)?)/i.exec(titleText);
-      if (versionMatch?.[1]) {
-        return versionMatch[1];
-      }
+  // Compare two semver strings. Returns: 1 if a > b, -1 if a < b, 0 if equal.
+  // Uses integer segment comparison so "2.10.0" > "2.9.0" (unlike lexicographic).
+  function compareVersions(a, b) {
+    const pa = String(a).split('.').map(Number);
+    const pb = String(b).split('.').map(Number);
+    const len = Math.max(pa.length, pb.length);
+    for (let i = 0; i < len; i++) {
+      const na = pa[i] || 0;
+      const nb = pb[i] || 0;
+      if (na > nb) return 1;
+      if (na < nb) return -1;
     }
-    return null;
+    return 0;
   }
 
   // ════════════════════════════════════════════════════════════════
