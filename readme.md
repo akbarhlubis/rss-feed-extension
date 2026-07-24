@@ -10,14 +10,11 @@ A Chrome extension inspired by the collie-reader/collie repository and serving a
 
 ## Features
 
-- Add RSS/Atom URLs to monitor for content changes
+- Add URLs to monitor for content changes
 - Set custom check intervals for each URL
-- Receive notifications when new content is detected (click notification to open article directly)
-- Badge counter on extension icon showing feeds with new content
-- Search & Filter feeds (All, New, Error, Paused)
-- Pause and Resume monitoring per feed without deleting
-- Compact, responsive, and accessible UI (WCAG 2.1 AA compliant)
-- Secure against XSS with strict input sanitization
+- Optional CSS selector to monitor specific parts of a page
+- Receive notifications when content changes
+- Clean and user-friendly interface
 
 ## Installation
 1. Download the latest release from [GitHub](https://github.com/akbarhlubis/rss-feed-extension/releases) or clone this repository
