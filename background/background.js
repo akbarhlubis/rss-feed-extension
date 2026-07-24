@@ -2,10 +2,6 @@ chrome.runtime.onInstalled.addListener(() => {
   setupAlarms();
 });
 
-chrome.runtime.onStartup.addListener(() => {
-  setupAlarms();
-});
-
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'scheduleCheck') {
     scheduleCheck(message.url);
@@ -13,60 +9,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     cancelCheck(message.id);
   } else if (message.action === 'manualCheck') {
     checkUrl(message.id);
-  } else if (message.action === 'pauseCheck') {
-    cancelCheck(message.id);
-  } else if (message.action === 'resumeCheck') {
-    chrome.storage.local.get('urls', data => {
-      const url = (data.urls || []).find(u => u.id === message.id);
-      if (url) scheduleCheck(url);
-    });
   }
 });
 
 chrome.alarms.onAlarm.addListener(alarm => {
   if (alarm.name.startsWith('check_url_')) {
-    const urlId = parseInt(alarm.name.split('_')[2], 10);
+    const urlId = parseInt(alarm.name.split('_')[2]);
     checkUrl(urlId);
   }
-});
-
-// Handle notification clicks — open the latest article link
-chrome.notifications.onClicked.addListener((notificationId) => {
-  if (!notificationId.startsWith('rss_')) return;
-
-  const urlId = parseInt(notificationId.split('_')[1], 10);
-  if (isNaN(urlId)) return;
-
-  chrome.storage.local.get('urls', (data) => {
-    const urls = data.urls || [];
-    const url = urls.find(u => u.id === urlId);
-    const link = url?.latestItems?.[0]?.link;
-
-    if (link && (link.startsWith('http://') || link.startsWith('https://'))) {
-      chrome.tabs.create({ url: link });
-    } else {
-      // Fallback: open the feed source URL
-      if (url?.url) chrome.tabs.create({ url: url.url });
-    }
-  });
-
-  // Dismiss the notification after click
-  chrome.notifications.clear(notificationId);
 });
 
 function setupAlarms() {
   chrome.storage.local.get('urls', data => {
     const urls = data.urls || [];
     urls.forEach(url => {
-      if (!url.isPaused) {
-        scheduleCheck(url);
-      }
+      scheduleCheck(url);
     });
   });
 }
 
 function scheduleCheck(url) {
-  if (url.isPaused) return;
   const alarmName = `check_url_${url.id}`;
   chrome.alarms.create(alarmName, {
     delayInMinutes: url.interval,
@@ -209,24 +171,27 @@ function checkUrl(urlId) {
     const url = urls.find(u => u.id === urlId);
     if (!url) return;
 
+    // Prevent multiple simultaneous checks for same URL using atomic update
     chrome.storage.local.get('urls', freshData => {
       const freshUrls = freshData.urls || [];
       const freshUrl = freshUrls.find(u => u.id === urlId);
-      if (!freshUrl || freshUrl.isPaused) return;
+      if (!freshUrl) return;
 
+      // temporary disable checking because stuck in checking
+      // if (freshUrl.isChecking) {
+      //   console.log('Check already in progress for URL:', freshUrl.name);
+      //   return;
+      // }
+
+      // Mark as checking
       freshUrl.isChecking = true;
       chrome.storage.local.set({ urls: freshUrls }, () => {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-
-        fetch(freshUrl.url, { signal: controller.signal })
-          .then(response => {
-            clearTimeout(timeoutId);
-            return response.text();
-          })
+        fetch(freshUrl.url)
+          .then(response => response.text())
           .then(xmlText => {
             const latestItems = parseXML(xmlText);
 
+            // Get fresh data to avoid race conditions
             chrome.storage.local.get('urls', newestData => {
               const newestUrls = newestData.urls || [];
               const newestUrl = newestUrls.find(u => u.id === urlId);
@@ -238,6 +203,10 @@ function checkUrl(urlId) {
                 const newTitle = latestItems[0].title;
                 const oldTitle = newestUrl.lastContent;
 
+                // Only trigger notification if:
+                // 1. We have a previous title to compare with
+                // 2. The new title is different from the old one
+                // 3. The new title is not empty
                 if (oldTitle && newTitle && oldTitle !== newTitle) {
                   hasNewContent = true;
                   console.log('New content detected for:', newestUrl.name);
@@ -250,9 +219,7 @@ function checkUrl(urlId) {
 
               newestUrl.latestItems = latestItems;
               newestUrl.lastChecked = new Date().toISOString();
-              newestUrl.isChecking = false;
-              newestUrl.hasNew = hasNewContent ? true : (newestUrl.hasNew || false);
-              newestUrl.isError = false;
+              newestUrl.isChecking = false; // Clear checking flag
 
               chrome.storage.local.set({ urls: newestUrls }, () => {
                 if (hasNewContent) {
@@ -262,17 +229,14 @@ function checkUrl(urlId) {
             });
           })
           .catch(error => {
-            clearTimeout(timeoutId);
-            const isTimeout = error.name === 'AbortError';
-            console.error('Error checking', freshUrl.url, ':', isTimeout ? 'Timeout (30s)' : error);
+            console.error('Error checking', freshUrl.url, ':', error);
 
+            // Clear checking flag on error
             chrome.storage.local.get('urls', errorData => {
               const errorUrls = errorData.urls || [];
               const errorUrl = errorUrls.find(u => u.id === urlId);
               if (errorUrl) {
                 errorUrl.isChecking = false;
-                errorUrl.isError = true;
-                errorUrl.lastError = isTimeout ? 'Timeout' : error.message;
                 chrome.storage.local.set({ urls: errorUrls });
               }
             });
@@ -294,17 +258,5 @@ function showNotification(url) {
     priority: 1
   });
 
-  updateBadgeCount();
-
   console.log('Notification shown for:', url.name, '- Title:', latestTitle);
-}
-
-function updateBadgeCount() {
-  chrome.storage.local.get('urls', data => {
-    const urls = data.urls || [];
-    const newCount = urls.filter(u => u.hasNew).length;
-    const badgeText = newCount > 0 ? String(newCount) : '';
-    chrome.action.setBadgeText({ text: badgeText });
-    chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
-  });
 }
