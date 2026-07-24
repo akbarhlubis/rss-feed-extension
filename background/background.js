@@ -20,6 +20,28 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       const url = (data.urls || []).find(u => u.id === message.id);
       if (url) scheduleCheck(url);
     });
+  } else if (message.action === 'checkLatestVersion') {
+    // Fetch from background — MV3 popup cannot reliably fetch cross-origin URLs
+    const currentVersion = chrome.runtime.getManifest().version;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
+    fetch('https://github.com/akbarhlubis/rss-feed-extension/releases.atom', {
+      signal: controller.signal
+    })
+      .then(r => r.text())
+      .then(xmlText => {
+        clearTimeout(timeout);
+        const latestVersion = parseGithubReleaseFeed(xmlText);
+        sendResponse({ success: true, latestVersion, currentVersion });
+      })
+      .catch(err => {
+        clearTimeout(timeout);
+        console.error('checkLatestVersion fetch error:', err.message);
+        sendResponse({ success: false, error: err.message });
+      });
+
+    return true; // keep message channel open for async sendResponse
   }
 });
 
@@ -53,6 +75,18 @@ chrome.notifications.onClicked.addListener((notificationId) => {
   // Dismiss the notification after click
   chrome.notifications.clear(notificationId);
 });
+
+// Parse the latest semver tag from a GitHub releases Atom feed
+function parseGithubReleaseFeed(xmlText) {
+  // GitHub release titles are like: "RSS Feed Warrior v2.1.0" or just "v2.1.0"
+  const match = /<entry[\s\S]*?<title[^>]*>([^<]*)<\/title>[\s\S]*?<\/entry>/i.exec(xmlText);
+  if (match?.[1]) {
+    const titleText = match[1].trim();
+    const versionMatch = /v?(\d+\.\d+(?:\.\d+)?)/i.exec(titleText);
+    if (versionMatch?.[1]) return versionMatch[1];
+  }
+  return null;
+}
 
 function setupAlarms() {
   chrome.storage.local.get('urls', data => {

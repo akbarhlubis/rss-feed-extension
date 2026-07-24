@@ -447,29 +447,34 @@ document.addEventListener('DOMContentLoaded', function () {
   // ════════════════════════════════════════════════════════════════
 
   function checkForUpdates() {
-    const githubReleasesURL = 'https://github.com/akbarhlubis/rss-feed-extension/releases.atom';
     checkUpdateBtn.innerHTML = '<i class="bi bi-hourglass-split" aria-hidden="true"></i>';
     checkUpdateBtn.disabled = true;
 
-    fetch(githubReleasesURL)
-      .then(r => r.text())
-      .then(xmlText => {
-        const latestVersion = parseGithubReleaseFeed(xmlText);
-        const currentVersion = chrome.runtime.getManifest().version;
+    // MV3 restriction: popup cannot fetch cross-origin URLs reliably.
+    // Delegate to background service worker which has full network access.
+    chrome.runtime.sendMessage({ action: 'checkLatestVersion' }, (response) => {
+      checkUpdateBtn.innerHTML = '<i class="bi bi-arrow-repeat" aria-hidden="true"></i>';
+      checkUpdateBtn.disabled = false;
 
-        if (latestVersion && compareVersions(latestVersion, currentVersion) > 0) {
-          showUpdateBanner(latestVersion);
-        } else {
-          showToast('You are using the latest version.');
-        }
-      })
-      .catch(() => {
+      if (chrome.runtime.lastError) {
+        console.error('checkForUpdates runtime error:', chrome.runtime.lastError.message);
         showToast('Failed to check for updates. Please try again.');
-      })
-      .finally(() => {
-        checkUpdateBtn.innerHTML = '<i class="bi bi-arrow-repeat" aria-hidden="true"></i>';
-        checkUpdateBtn.disabled = false;
-      });
+        return;
+      }
+
+      if (!response || !response.success) {
+        console.error('checkForUpdates failed:', response?.error);
+        showToast('Failed to check for updates. Please try again.');
+        return;
+      }
+
+      const { latestVersion, currentVersion } = response;
+      if (latestVersion && compareVersions(latestVersion, currentVersion) > 0) {
+        showUpdateBanner(latestVersion);
+      } else {
+        showToast('You are using the latest version.');
+      }
+    });
   }
 
   function showUpdateBanner(newVersion) {
