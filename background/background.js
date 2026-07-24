@@ -1,9 +1,11 @@
 chrome.runtime.onInstalled.addListener(() => {
   setupAlarms();
+  updateBadgeCount();
 });
 
 chrome.runtime.onStartup.addListener(() => {
   setupAlarms();
+  updateBadgeCount();
 });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -348,3 +350,10 @@ function updateBadgeCount() {
     chrome.action.setBadgeBackgroundColor({ color: '#e74c3c' });
   });
 }
+
+// Automatically keep the badge in sync with storage changes
+chrome.storage.onChanged.addListener((changes, namespace) => {
+  if (namespace === 'local' && changes.urls) {
+    updateBadgeCount();
+  }
+});
